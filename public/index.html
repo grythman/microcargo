@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MicroCargo — Миний захиалга</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="logo">📦</span> MicroCargo</div>
+    <nav>
+      <a href="/admin.html">Админ</a>
+      <a href="#" id="logoutLink" class="hidden">Гарах</a>
+    </nav>
+  </div>
+
+  <!-- ===================== AUTH VIEW ===================== -->
+  <div class="container narrow" id="authView">
+    <div class="card">
+      <h1>Миний захиалга</h1>
+      <p class="subtitle">Утасны дугаараараа нэвтэрч зөвхөн өөрийн захиалгаа хараарай.</p>
+
+      <div class="tabs">
+        <button id="tabLogin" class="active">Нэвтрэх</button>
+        <button id="tabRegister">Бүртгүүлэх</button>
+      </div>
+
+      <!-- Login form -->
+      <form id="loginForm">
+        <label>Утасны дугаар</label>
+        <input type="tel" id="loginPhone" placeholder="99112233" required />
+        <label>Нууц үг</label>
+        <input type="password" id="loginPassword" placeholder="••••••" required />
+        <button type="submit" class="btn full">Нэвтрэх</button>
+      </form>
+
+      <!-- Register form -->
+      <form id="registerForm" class="hidden">
+        <label>Утасны дугаар</label>
+        <input type="tel" id="regPhone" placeholder="99112233" required />
+        <label>Таны нэр</label>
+        <input type="text" id="regName" placeholder="Бат" required />
+        <label>Нууц үг</label>
+        <input type="password" id="regPassword" placeholder="доод тал нь 4 тэмдэгт" required />
+        <button type="submit" class="btn full">Бүртгүүлэх</button>
+      </form>
+
+      <div id="authMsg" class="msg hidden"></div>
+    </div>
+    <p class="muted" style="text-align:center; font-size:0.85rem;">
+      Захиалгыг карго оператор таны утасны дугаараар бүртгэдэг.<br/>
+      Та бүртгүүлсний дараа тэр дугаарт хамаарах захиалгууд харагдана.
+    </p>
+  </div>
+
+  <!-- ===================== DASHBOARD VIEW ===================== -->
+  <div class="container hidden" id="dashView">
+    <h1 id="welcome">Сайн байна уу</h1>
+    <p class="subtitle" id="phoneLine"></p>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="card">
+      <h2>Миний захиалгууд</h2>
+      <div class="table-wrap">
+        <table id="ordersTable">
+          <thead>
+            <tr>
+              <th>Огноо</th>
+              <th>Бараа</th>
+              <th>Тоо</th>
+              <th>Нэгж үнэ</th>
+              <th>Нийт үнэ</th>
+              <th>Төлөв</th>
+              <th>Трак код</th>
+              <th>Тэмдэглэл</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+      <div id="ordersEmpty" class="empty hidden">Танд одоогоор бүртгэгдсэн захиалга алга байна.</div>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/customer.js"></script>
+</body>
+</html>
