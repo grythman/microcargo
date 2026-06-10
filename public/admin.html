@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MicroCargo — Админ</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="logo">📦</span> MicroCargo · Админ</div>
+    <nav>
+      <a href="/">Захиалагчийн хэсэг</a>
+      <a href="#" id="logoutLink" class="hidden">Гарах</a>
+    </nav>
+  </div>
+
+  <!-- ===================== ADMIN LOGIN ===================== -->
+  <div class="container narrow" id="loginView">
+    <div class="card">
+      <h1>Админ нэвтрэх</h1>
+      <p class="subtitle">Зөвхөн карго оператор нэвтэрнэ.</p>
+      <form id="adminLoginForm">
+        <label>Нэвтрэх нэр</label>
+        <input type="text" id="adminUsername" placeholder="admin" required />
+        <label>Нууц үг</label>
+        <input type="password" id="adminPassword" placeholder="••••••" required />
+        <button type="submit" class="btn full">Нэвтрэх</button>
+      </form>
+      <div id="loginMsg" class="msg hidden"></div>
+    </div>
+  </div>
+
+  <!-- ===================== ADMIN PANEL ===================== -->
+  <div class="container hidden" id="panelView">
+    <h1>Захиалгын удирдлага</h1>
+
+    <div class="stats" id="stats"></div>
+
+    <!-- Add / edit order form -->
+    <div class="card">
+      <h2 id="formTitle">Шинэ захиалга нэмэх</h2>
+      <form id="orderForm">
+        <input type="hidden" id="orderId" />
+        <div class="row">
+          <div>
+            <label>Утасны дугаар *</label>
+            <input type="tel" id="fPhone" placeholder="99112233" required />
+          </div>
+          <div>
+            <label>Барааны нэр *</label>
+            <input type="text" id="fItem" placeholder="Гутал" required />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Тоо ширхэг</label>
+            <input type="number" id="fQty" value="1" min="0" step="1" />
+          </div>
+          <div>
+            <label>Нэгж үнэ (₮)</label>
+            <input type="number" id="fUnit" value="0" min="0" step="any" />
+          </div>
+          <div>
+            <label>Нийт үнэ (₮) <span class="muted">— хоосон бол автоматаар</span></label>
+            <input type="number" id="fTotal" placeholder="авто" min="0" step="any" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Төлөв</label>
+            <select id="fStatus">
+              <option value="pending">Хүлээгдэж буй</option>
+              <option value="in_transit">Замд яваа</option>
+              <option value="received">Хүлээж авсан</option>
+            </select>
+          </div>
+          <div>
+            <label>Трак код</label>
+            <input type="text" id="fTrack" placeholder="заавал биш" />
+          </div>
+        </div>
+        <label>Тэмдэглэл</label>
+        <textarea id="fNote" rows="2" placeholder="заавал биш"></textarea>
+
+        <div class="actions" style="margin-top:18px;">
+          <button type="submit" class="btn" id="submitBtn">Захиалга нэмэх</button>
+          <button type="button" class="btn secondary hidden" id="cancelEditBtn">Болих</button>
+        </div>
+        <div id="formMsg" class="msg hidden"></div>
+      </form>
+    </div>
+
+    <!-- Orders list + search -->
+    <div class="card">
+      <div class="toolbar">
+        <div class="grow">
+          <label>Утасны дугаараар хайх</label>
+          <input type="tel" id="searchPhone" placeholder="Бүх захиалгыг харахын тулд хоосон үлдээ" />
+        </div>
+        <button class="btn" id="searchBtn">Хайх</button>
+        <button class="btn secondary" id="clearSearchBtn">Цэвэрлэх</button>
+      </div>
+      <div class="table-wrap">
+        <table id="ordersTable">
+          <thead>
+            <tr>
+              <th>Огноо</th>
+              <th>Утас</th>
+              <th>Бараа</th>
+              <th>Тоо</th>
+              <th>Нэгж үнэ</th>
+              <th>Нийт</th>
+              <th>Төлөв</th>
+              <th>Трак</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+      <div id="ordersEmpty" class="empty hidden">Захиалга алга байна.</div>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>
