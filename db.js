@@ -4,7 +4,13 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-const DB_PATH = process.env.DB_PATH || (process.env.VERCEL ? '/tmp/microcargo.db' : './data/microcargo.db');
+const isVercelRuntime =
+  process.env.VERCEL === '1' ||
+  Boolean(process.env.VERCEL_URL) ||
+  Boolean(process.env.VERCEL_ENV) ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+const DB_PATH = process.env.DB_PATH || (isVercelRuntime ? '/tmp/microcargo.db' : path.join(__dirname, 'data', 'microcargo.db'));
 
 // Make sure the folder for the database file exists
 const dbDir = path.dirname(DB_PATH);
