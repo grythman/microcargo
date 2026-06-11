@@ -268,19 +268,13 @@ function renderOrders(orders) {
   const groups = [];
   let currentGroup = [];
   for (const o of orders) {
-    if (currentGroup.length === 0) {
+    // Group consecutive items by phone.
+    // Also use the date's day as a grouping factor if desired, but in this case just phone is fine.
+    if (currentGroup.length === 0 || currentGroup[0].phone === o.phone) {
       currentGroup.push(o);
     } else {
-      const prev = currentGroup[0];
-      const samePhone = prev.phone === o.phone;
-      const sameDate = formatDate(prev.created_at) === formatDate(o.created_at);
-      
-      if (samePhone && sameDate) {
-        currentGroup.push(o);
-      } else {
-        groups.push(currentGroup);
-        currentGroup = [o];
-      }
+      groups.push(currentGroup);
+      currentGroup = [o];
     }
   }
   if (currentGroup.length > 0) {
@@ -294,8 +288,8 @@ function renderOrders(orders) {
       group.forEach((o, index) => {
         html += `<tr>`;
         if (index === 0) {
-          html += `<td rowspan="${rowspan}" style="vertical-align: middle;">${formatDate(group[0].created_at)}</td>`;
           html += `<td rowspan="${rowspan}" style="vertical-align: middle; font-weight: 600;">${escapeHtml(group[0].phone)}</td>`;
+          html += `<td rowspan="${rowspan}" style="vertical-align: middle; color: var(--muted);">${formatDate(group[0].created_at)}</td>`;
         }
         html += `
           <td>${escapeHtml(o.code || o.item_name)}</td>
