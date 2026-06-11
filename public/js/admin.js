@@ -64,13 +64,9 @@ orderForm.addEventListener('submit', async (e) => {
   const id = document.getElementById('orderId').value;
   const payload = {
     phone: document.getElementById('fPhone').value,
-    item_name: document.getElementById('fItem').value,
-    quantity: document.getElementById('fQty').value,
+    code: document.getElementById('fCode').value,
     unit_price: document.getElementById('fUnit').value,
     total_price: document.getElementById('fTotal').value,
-    status: document.getElementById('fStatus').value,
-    tracking_code: document.getElementById('fTrack').value,
-    note: document.getElementById('fNote').value,
   };
 
   try {
@@ -93,7 +89,7 @@ cancelEditBtn.addEventListener('click', resetForm);
 function resetForm() {
   orderForm.reset();
   document.getElementById('orderId').value = '';
-  document.getElementById('fQty').value = '1';
+  document.getElementById('fCode').value = '';
   document.getElementById('fUnit').value = '0';
   formTitle.textContent = 'Шинэ захиалга нэмэх';
   submitBtn.textContent = 'Захиалга нэмэх';
@@ -103,13 +99,9 @@ function resetForm() {
 function startEdit(order) {
   document.getElementById('orderId').value = order.id;
   document.getElementById('fPhone').value = order.phone;
-  document.getElementById('fItem').value = order.item_name;
-  document.getElementById('fQty').value = order.quantity;
+  document.getElementById('fCode').value = order.code || order.item_name;
   document.getElementById('fUnit').value = order.unit_price;
   document.getElementById('fTotal').value = order.total_price;
-  document.getElementById('fStatus').value = order.status;
-  document.getElementById('fTrack').value = order.tracking_code || '';
-  document.getElementById('fNote').value = order.note || '';
 
   formTitle.textContent = 'Захиалга засах #' + order.id;
   submitBtn.textContent = 'Хадгалах';
@@ -171,12 +163,9 @@ function renderOrders(orders) {
       <tr>
         <td>${formatDate(o.created_at)}</td>
         <td>${escapeHtml(o.phone)}</td>
-        <td>${escapeHtml(o.item_name)}</td>
-        <td>${o.quantity}</td>
+        <td>${escapeHtml(o.code || o.item_name)}</td>
         <td>${formatMoney(o.unit_price)}</td>
         <td>${formatMoney(o.total_price)}</td>
-        <td>${statusBadge(o.status)}</td>
-        <td>${escapeHtml(o.tracking_code) || '<span class="muted">—</span>'}</td>
         <td>
           <div class="actions">
             <button class="btn small secondary" data-edit="${o.id}">Засах</button>

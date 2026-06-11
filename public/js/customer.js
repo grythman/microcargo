@@ -120,8 +120,7 @@ function renderOrders(orders) {
       (o) => `
       <tr>
         <td>${formatDate(o.created_at)}</td>
-        <td>${escapeHtml(o.item_name)}</td>
-        <td>${o.quantity}</td>
+        <td>${escapeHtml(o.code || o.item_name)}</td>
         <td>${formatMoney(o.unit_price)}</td>
         <td>${formatMoney(o.total_price)}</td>
         <td>${statusBadge(o.status)}</td>

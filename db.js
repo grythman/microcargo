@@ -46,4 +46,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(phone);
 `);
 
+const orderColumns = db.prepare('PRAGMA table_info(orders)').all().map((column) => column.name);
+if (!orderColumns.includes('code')) {
+  db.exec("ALTER TABLE orders ADD COLUMN code TEXT NOT NULL DEFAULT '';");
+  db.exec("UPDATE orders SET code = item_name WHERE code = '' OR code IS NULL;");
+}
+
 module.exports = db;

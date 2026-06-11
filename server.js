@@ -94,12 +94,13 @@ const stmts = {
   allOrders: db.prepare('SELECT * FROM orders ORDER BY created_at DESC, id DESC'),
   orderById: db.prepare('SELECT * FROM orders WHERE id = ?'),
   insertOrder: db.prepare(`
-    INSERT INTO orders (phone, item_name, quantity, unit_price, total_price, status, tracking_code, note)
-    VALUES (@phone, @item_name, @quantity, @unit_price, @total_price, @status, @tracking_code, @note)
+    INSERT INTO orders (phone, code, item_name, quantity, unit_price, total_price, status, tracking_code, note)
+    VALUES (@phone, @code, @item_name, @quantity, @unit_price, @total_price, @status, @tracking_code, @note)
   `),
   updateOrder: db.prepare(`
     UPDATE orders SET
       phone = @phone,
+      code = @code,
       item_name = @item_name,
       quantity = @quantity,
       unit_price = @unit_price,
@@ -188,7 +189,8 @@ app.get('/api/admin/customers', requireAdmin, (req, res) => {
 
 function buildOrderPayload(body) {
   const phone = normalizePhone(body.phone);
-  const item_name = String(body.item_name || '').trim();
+  const code = String(body.code || body.item_name || '').trim();
+  const item_name = code;
   const quantity = Number(body.quantity || 1);
   const unit_price = Number(body.unit_price || 0);
   const total_price = computeTotal(quantity, unit_price, body.total_price);
@@ -197,13 +199,13 @@ function buildOrderPayload(body) {
   const tracking_code = body.tracking_code ? String(body.tracking_code).trim() : null;
   const note = body.note ? String(body.note).trim() : null;
 
-  return { phone, item_name, quantity, unit_price, total_price, status, tracking_code, note };
+  return { phone, code, item_name, quantity, unit_price, total_price, status, tracking_code, note };
 }
 
 app.post('/api/admin/orders', requireAdmin, (req, res) => {
   const payload = buildOrderPayload(req.body);
-  if (!payload.phone || !payload.item_name) {
-    return res.status(400).json({ error: 'Утасны дугаар болон барааны нэр заавал шаардлагатай' });
+  if (!payload.phone || !payload.code) {
+    return res.status(400).json({ error: 'Утасны дугаар болон код заавал шаардлагатай' });
   }
   const info = stmts.insertOrder.run(payload);
   res.json({ order: stmts.orderById.get(info.lastInsertRowid) });
@@ -215,8 +217,8 @@ app.put('/api/admin/orders/:id', requireAdmin, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Захиалга олдсонгүй' });
 
   const payload = buildOrderPayload(req.body);
-  if (!payload.phone || !payload.item_name) {
-    return res.status(400).json({ error: 'Утасны дугаар болон барааны нэр заавал шаардлагатай' });
+  if (!payload.phone || !payload.code) {
+    return res.status(400).json({ error: 'Утасны дугаар болон код заавал шаардлагатай' });
   }
   stmts.updateOrder.run({ ...payload, id });
   res.json({ order: stmts.orderById.get(id) });

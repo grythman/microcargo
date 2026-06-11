@@ -48,15 +48,11 @@
             <input type="tel" id="fPhone" placeholder="99112233" required />
           </div>
           <div>
-            <label>Барааны нэр *</label>
-            <input type="text" id="fItem" placeholder="Гутал" required />
+            <label>Код *</label>
+            <input type="text" id="fCode" placeholder="79107232926362" required />
           </div>
         </div>
         <div class="row">
-          <div>
-            <label>Тоо ширхэг</label>
-            <input type="number" id="fQty" value="1" min="0" step="1" />
-          </div>
           <div>
             <label>Нэгж үнэ (₮)</label>
             <input type="number" id="fUnit" value="0" min="0" step="any" />
@@ -66,22 +62,6 @@
             <input type="number" id="fTotal" placeholder="авто" min="0" step="any" />
           </div>
         </div>
-        <div class="row">
-          <div>
-            <label>Төлөв</label>
-            <select id="fStatus">
-              <option value="pending">Хүлээгдэж буй</option>
-              <option value="in_transit">Замд яваа</option>
-              <option value="received">Хүлээж авсан</option>
-            </select>
-          </div>
-          <div>
-            <label>Трак код</label>
-            <input type="text" id="fTrack" placeholder="заавал биш" />
-          </div>
-        </div>
-        <label>Тэмдэглэл</label>
-        <textarea id="fNote" rows="2" placeholder="заавал биш"></textarea>
 
         <div class="actions" style="margin-top:18px;">
           <button type="submit" class="btn" id="submitBtn">Захиалга нэмэх</button>
@@ -107,12 +87,9 @@
             <tr>
               <th>Огноо</th>
               <th>Утас</th>
-              <th>Бараа</th>
-              <th>Тоо</th>
+              <th>Код</th>
               <th>Нэгж үнэ</th>
               <th>Нийт</th>
-              <th>Төлөв</th>
-              <th>Трак</th>
               <th></th>
             </tr>
           </thead>
