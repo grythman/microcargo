@@ -15,8 +15,84 @@ const cancelEditBtn = document.getElementById('cancelEditBtn');
 const formTitle = document.getElementById('formTitle');
 
 let currentOrders = [];
+let lineItems = []; // Temporary list of items for batch entry
 
 function token() { return TokenStore.get(TOKEN_KEY); }
+
+// Helper: calculate total for one item
+function calcItemTotal(unitPrice) {
+  return Number(unitPrice || 0);
+}
+
+// Helper: recalculate grand total and update display
+function updateGrandTotal() {
+  const total = lineItems.reduce((sum, item) => sum + calcItemTotal(item.unit_price), 0);
+  document.getElementById('grandTotal').textContent = formatMoney(total);
+  
+  const section = document.getElementById('grandTotalSection');
+  if (lineItems.length > 0) {
+    section.style.display = 'block';
+  } else {
+    section.style.display = 'none';
+  }
+}
+
+// Helper: render line items table
+function renderLineItems() {
+  const body = document.getElementById('lineItemsBody');
+  const table = document.getElementById('lineItemsTable');
+  const empty = document.getElementById('lineItemsEmpty');
+  
+  if (lineItems.length === 0) {
+    body.innerHTML = '';
+    table.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  
+  empty.style.display = 'none';
+  table.style.display = 'table';
+  
+  body.innerHTML = lineItems.map((item, idx) => `
+    <tr>
+      <td>${escapeHtml(item.code)}</td>
+      <td>${formatMoney(item.unit_price)}</td>
+      <td>${formatMoney(calcItemTotal(item.unit_price))}</td>
+      <td>
+        <button type="button" class="btn small danger" data-remove="${idx}" style="padding: 4px 8px; font-size: 0.75rem;">Устгах</button>
+      </td>
+    </tr>
+  `).join('');
+  
+  body.querySelectorAll('[data-remove]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const idx = Number(btn.dataset.remove);
+      lineItems.splice(idx, 1);
+      renderLineItems();
+      updateGrandTotal();
+    });
+  });
+  
+  updateGrandTotal();
+}
+
+// Add item button
+document.getElementById('addItemBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  const code = document.getElementById('fCode').value.trim();
+  const unitPrice = Number(document.getElementById('fUnit').value || 0);
+  
+  if (!code) {
+    alert('Код оруулна уу');
+    return;
+  }
+  
+  lineItems.push({ code, unit_price: unitPrice });
+  renderLineItems();
+  document.getElementById('fCode').value = '';
+  document.getElementById('fUnit').value = '0';
+});
 
 // ---- Login ----
 adminLoginForm.addEventListener('submit', async (e) => {
@@ -62,21 +138,45 @@ orderForm.addEventListener('submit', async (e) => {
   hideMsg(formMsg);
 
   const id = document.getElementById('orderId').value;
-  const payload = {
-    phone: document.getElementById('fPhone').value,
-    code: document.getElementById('fCode').value,
-    unit_price: document.getElementById('fUnit').value,
-    total_price: document.getElementById('fTotal').value,
-  };
-
+  const phone = document.getElementById('fPhone').value.trim();
+  
+  if (!phone) {
+    showMsg(formMsg, 'Утасны дугаар оруулна уу');
+    return;
+  }
+  
   try {
     if (id) {
+      // Edit mode: single order
+      const payload = {
+        phone: phone,
+        code: document.getElementById('fCodeEdit').value,
+        unit_price: document.getElementById('fUnitEdit').value,
+        total_price: document.getElementById('fTotalEdit').value || calcItemTotal(document.getElementById('fUnitEdit').value),
+      };
       await api('/api/admin/orders/' + id, { method: 'PUT', body: payload, token: token() });
       showMsg(formMsg, 'Захиалга шинэчлэгдлээ.', 'success');
     } else {
-      await api('/api/admin/orders', { method: 'POST', body: payload, token: token() });
-      showMsg(formMsg, 'Захиалга нэмэгдлээ.', 'success');
+      // Batch entry mode: submit all line items
+      if (lineItems.length === 0) {
+        showMsg(formMsg, 'Дор хаяж нэг бараа нэмэнэ үү');
+        return;
+      }
+      
+      // Create orders for each item
+      for (const item of lineItems) {
+        const payload = {
+          phone: phone,
+          code: item.code,
+          unit_price: item.unit_price,
+          total_price: calcItemTotal(item.unit_price),
+        };
+        await api('/api/admin/orders', { method: 'POST', body: payload, token: token() });
+      }
+      
+      showMsg(formMsg, `${lineItems.length} захиалга нэмэгдлээ.`, 'success');
     }
+    
     resetForm();
     loadOrders(document.getElementById('searchPhone').value);
   } catch (err) {
@@ -91,18 +191,26 @@ function resetForm() {
   document.getElementById('orderId').value = '';
   document.getElementById('fCode').value = '';
   document.getElementById('fUnit').value = '0';
+  lineItems = [];
+  renderLineItems();
   formTitle.textContent = 'Шинэ захиалга нэмэх';
   submitBtn.textContent = 'Захиалга нэмэх';
   cancelEditBtn.classList.add('hidden');
+  document.getElementById('batchEntrySection').style.display = 'block';
+  document.getElementById('editModeSection').style.display = 'none';
 }
 
 function startEdit(order) {
   document.getElementById('orderId').value = order.id;
   document.getElementById('fPhone').value = order.phone;
-  document.getElementById('fCode').value = order.code || order.item_name;
-  document.getElementById('fUnit').value = order.unit_price;
-  document.getElementById('fTotal').value = order.total_price;
-
+  document.getElementById('fCodeEdit').value = order.code || order.item_name;
+  document.getElementById('fUnitEdit').value = order.unit_price;
+  document.getElementById('fTotalEdit').value = order.total_price;
+  
+  // Switch to edit mode
+  document.getElementById('batchEntrySection').style.display = 'none';
+  document.getElementById('editModeSection').style.display = 'block';
+  
   formTitle.textContent = 'Захиалга засах #' + order.id;
   submitBtn.textContent = 'Хадгалах';
   cancelEditBtn.classList.remove('hidden');

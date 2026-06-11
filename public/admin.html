@@ -42,24 +42,72 @@
       <h2 id="formTitle">Шинэ захиалга нэмэх</h2>
       <form id="orderForm">
         <input type="hidden" id="orderId" />
+        
+        <!-- Phone (header, locked during batch entry) -->
         <div class="row">
           <div>
             <label>Утасны дугаар *</label>
             <input type="tel" id="fPhone" placeholder="99112233" required />
           </div>
-          <div>
-            <label>Код *</label>
-            <input type="text" id="fCode" placeholder="79107232926362" required />
+        </div>
+        
+        <!-- Item entry section (only shown if not in edit mode) -->
+        <div id="batchEntrySection">
+          <h3 style="margin-top: 20px; margin-bottom: 12px; font-size: 1rem;">Барааны мөрүүд нэмэх</h3>
+          <div class="row">
+            <div>
+              <label>Код</label>
+              <input type="text" id="fCode" placeholder="79107232926362" />
+            </div>
+            <div>
+              <label>Нэгж үнэ (₮)</label>
+              <input type="number" id="fUnit" value="0" min="0" step="any" />
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+              <button type="button" class="btn" id="addItemBtn" style="margin: 0;">Нэмэх</button>
+            </div>
+          </div>
+          
+          <!-- Line items table -->
+          <div class="table-wrap" style="margin-top: 16px; margin-bottom: 16px;">
+            <table id="lineItemsTable" style="display: none;">
+              <thead>
+                <tr>
+                  <th>Код</th>
+                  <th>Нэгж үнэ</th>
+                  <th>Нийт үнэ</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="lineItemsBody"></tbody>
+            </table>
+            <div id="lineItemsEmpty" class="empty" style="padding: 16px 0; margin: 0;">Одоогоор нэмсэн бараа алга</div>
+          </div>
+          
+          <!-- Grand total -->
+          <div style="background: var(--card-2); padding: 12px; border-radius: 8px; text-align: right; margin-bottom: 16px; display: none;" id="grandTotalSection">
+            <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 4px;">Нийт дүн</div>
+            <div style="font-size: 1.4rem; font-weight: 700;" id="grandTotal">0</div>
           </div>
         </div>
-        <div class="row">
-          <div>
-            <label>Нэгж үнэ (₮)</label>
-            <input type="number" id="fUnit" value="0" min="0" step="any" />
+        
+        <!-- Edit mode section (only shown if editing an order) -->
+        <div id="editModeSection" style="display: none;">
+          <div class="row">
+            <div>
+              <label>Код *</label>
+              <input type="text" id="fCodeEdit" placeholder="79107232926362" required />
+            </div>
           </div>
-          <div>
-            <label>Нийт үнэ (₮) <span class="muted">— хоосон бол автоматаар</span></label>
-            <input type="number" id="fTotal" placeholder="авто" min="0" step="any" />
+          <div class="row">
+            <div>
+              <label>Нэгж үнэ (₮)</label>
+              <input type="number" id="fUnitEdit" value="0" min="0" step="any" />
+            </div>
+            <div>
+              <label>Нийт үнэ (₮)</label>
+              <input type="number" id="fTotalEdit" placeholder="авто" min="0" step="any" />
+            </div>
           </div>
         </div>
 
