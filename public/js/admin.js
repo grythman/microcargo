@@ -265,23 +265,46 @@ function renderOrders(orders) {
   empty.classList.add('hidden');
   table.classList.remove('hidden');
 
-  body.innerHTML = orders
-    .map(
-      (o) => `
-      <tr>
-        <td>${formatDate(o.created_at)}</td>
-        <td>${escapeHtml(o.phone)}</td>
-        <td>${escapeHtml(o.code || o.item_name)}</td>
-        <td>${formatMoney(o.unit_price)}</td>
-        <td>${formatMoney(o.total_price)}</td>
-        <td>
-          <div class="actions">
-            <button class="btn small secondary" data-edit="${o.id}">Засах</button>
-            <button class="btn small danger" data-del="${o.id}">Устгах</button>
-          </div>
-        </td>
-      </tr>`
-    )
+  const groups = [];
+  let currentGroup = [];
+  for (const o of orders) {
+    // Group consecutive items by phone.
+    // Also use the date's day as a grouping factor if desired, but in this case just phone is fine.
+    if (currentGroup.length === 0 || currentGroup[0].phone === o.phone) {
+      currentGroup.push(o);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [o];
+    }
+  }
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  body.innerHTML = groups
+    .map((group) => {
+      let html = '';
+      const rowspan = group.length;
+      group.forEach((o, index) => {
+        html += `<tr>`;
+        if (index === 0) {
+          html += `<td rowspan="${rowspan}" style="vertical-align: middle;">${formatDate(group[0].created_at)}</td>`;
+          html += `<td rowspan="${rowspan}" style="vertical-align: middle; font-weight: 600;">${escapeHtml(group[0].phone)}</td>`;
+        }
+        html += `
+          <td>${escapeHtml(o.code || o.item_name)}</td>
+          <td>${formatMoney(o.unit_price)}</td>
+          <td>${formatMoney(o.total_price)}</td>
+          <td>
+            <div class="actions">
+              <button class="btn small secondary" data-edit="${o.id}">Засах</button>
+              <button class="btn small danger" data-del="${o.id}">Устгах</button>
+            </div>
+          </td>
+        </tr>`;
+      });
+      return html;
+    })
     .join('');
 
   body.querySelectorAll('[data-edit]').forEach((btn) => {
