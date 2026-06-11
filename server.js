@@ -238,6 +238,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => {
-  console.log(`MicroCargo server running on http://localhost:${PORT}`);
-});
+if (require.main === module && !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`MicroCargo server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
