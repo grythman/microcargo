@@ -268,13 +268,19 @@ function renderOrders(orders) {
   const groups = [];
   let currentGroup = [];
   for (const o of orders) {
-    // Group consecutive items by phone.
-    // Also use the date's day as a grouping factor if desired, but in this case just phone is fine.
-    if (currentGroup.length === 0 || currentGroup[0].phone === o.phone) {
+    if (currentGroup.length === 0) {
       currentGroup.push(o);
     } else {
-      groups.push(currentGroup);
-      currentGroup = [o];
+      const prev = currentGroup[0];
+      const samePhone = prev.phone === o.phone;
+      const sameDate = formatDate(prev.created_at) === formatDate(o.created_at);
+      
+      if (samePhone && sameDate) {
+        currentGroup.push(o);
+      } else {
+        groups.push(currentGroup);
+        currentGroup = [o];
+      }
     }
   }
   if (currentGroup.length > 0) {
