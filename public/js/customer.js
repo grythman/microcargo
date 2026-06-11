@@ -115,19 +115,42 @@ function renderOrders(orders) {
 
   empty.classList.add('hidden');
   table.classList.remove('hidden');
-  body.innerHTML = orders
-    .map(
-      (o) => `
-      <tr>
-        <td>${formatDate(o.created_at)}</td>
-        <td>${escapeHtml(o.code || o.item_name)}</td>
-        <td>${formatMoney(o.unit_price)}</td>
-        <td>${formatMoney(o.total_price)}</td>
-        <td>${statusBadge(o.status)}</td>
-        <td>${escapeHtml(o.tracking_code) || '<span class="muted">—</span>'}</td>
-        <td>${escapeHtml(o.note) || '<span class="muted">—</span>'}</td>
-      </tr>`
-    )
+
+  const groups = [];
+  let currentGroup = [];
+  for (const o of orders) {
+    // Group consecutive items by the exact same time (since batch items are created at the same time)
+    if (currentGroup.length === 0 || currentGroup[0].created_at === o.created_at) {
+      currentGroup.push(o);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [o];
+    }
+  }
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  body.innerHTML = groups
+    .map((group) => {
+      let html = '';
+      const rowspan = group.length;
+      group.forEach((o, index) => {
+        html += `<tr>`;
+        if (index === 0) {
+          html += `<td rowspan="${rowspan}" style="vertical-align: middle; color: var(--muted);">${formatDate(group[0].created_at)}</td>`;
+        }
+        html += `
+          <td>${escapeHtml(o.code || o.item_name)}</td>
+          <td>${formatMoney(o.unit_price)}</td>
+          <td>${formatMoney(o.total_price)}</td>
+          <td>${statusBadge(o.status)}</td>
+          <td>${escapeHtml(o.tracking_code) || '<span class="muted">—</span>'}</td>
+          <td>${escapeHtml(o.note) || '<span class="muted">—</span>'}</td>
+        </tr>`;
+      });
+      return html;
+    })
     .join('');
 }
 
