@@ -86,6 +86,10 @@ a { color: #60a5fa; }
   text-align: left;
   max-width: 220px;
 }
+.top-profile:hover {
+  border-color: var(--primary);
+  background: #2a3b52;
+}
 .top-profile.active {
   border-color: var(--primary);
 }
