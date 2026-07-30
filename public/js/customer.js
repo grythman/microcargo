@@ -18,6 +18,12 @@ const profileForm = document.getElementById('profileForm');
 const passwordForm = document.getElementById('passwordForm');
 const profileMsg = document.getElementById('profileMsg');
 const passwordMsg = document.getElementById('passwordMsg');
+const avatarMsg = document.getElementById('avatarMsg');
+const avatarInput = document.getElementById('avatarInput');
+const avatarPreview = document.getElementById('avatarPreview');
+const avatarPlaceholder = document.getElementById('avatarPlaceholder');
+const removeAvatarBtn = document.getElementById('removeAvatarBtn');
+const exportOrdersBtn = document.getElementById('exportOrdersBtn');
 
 // ---- Tab switching ----
 tabLogin.addEventListener('click', () => {
@@ -36,7 +42,6 @@ tabRegister.addEventListener('click', () => {
   hideMsg(authMsg);
 });
 
-// ---- Login ----
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideMsg(authMsg);
@@ -55,7 +60,6 @@ loginForm.addEventListener('submit', async (e) => {
   }
 });
 
-// ---- Register ----
 registerForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideMsg(authMsg);
@@ -75,7 +79,6 @@ registerForm.addEventListener('submit', async (e) => {
   }
 });
 
-// ---- Logout ----
 logoutLink.addEventListener('click', (e) => {
   e.preventDefault();
   TokenStore.clear(TOKEN_KEY);
@@ -92,6 +95,19 @@ profileNavLink.addEventListener('click', (e) => {
   loadProfile();
 });
 
+exportOrdersBtn.addEventListener('click', async () => {
+  const token = TokenStore.get(TOKEN_KEY);
+  if (!token) return showAuth();
+  try {
+    await downloadFile('/api/my/orders/export', {
+      token,
+      filename: 'cargo-orders.xlsx',
+    });
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 profileForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideMsg(profileMsg);
@@ -102,9 +118,14 @@ profileForm.addEventListener('submit', async (e) => {
     const data = await api('/api/my/profile', {
       method: 'PUT',
       token,
-      body: { name: document.getElementById('profileName').value },
+      body: {
+        name: document.getElementById('profileName').value,
+        address: document.getElementById('profileAddress').value,
+        profile_note: document.getElementById('profileNote').value,
+      },
     });
     TokenStore.set(TOKEN_KEY, data.token);
+    fillProfile(data.user);
     showMsg(profileMsg, 'Мэдээлэл хадгалагдлаа.', 'success');
   } catch (err) {
     showMsg(profileMsg, err.message);
@@ -137,6 +158,48 @@ passwordForm.addEventListener('submit', async (e) => {
     showMsg(passwordMsg, 'Нууц үг амжилттай солигдлоо.', 'success');
   } catch (err) {
     showMsg(passwordMsg, err.message);
+  }
+});
+
+avatarInput.addEventListener('change', async () => {
+  hideMsg(avatarMsg);
+  const file = avatarInput.files && avatarInput.files[0];
+  if (!file) return;
+
+  const token = TokenStore.get(TOKEN_KEY);
+  if (!token) return showAuth();
+
+  const formData = new FormData();
+  formData.append('avatar', file);
+
+  try {
+    const res = await fetch('/api/my/avatar', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Зураг оруулахад алдаа гарлаа');
+    fillProfile(data.user);
+    showMsg(avatarMsg, 'Зураг амжилттай хадгалагдлаа.', 'success');
+  } catch (err) {
+    showMsg(avatarMsg, err.message);
+  } finally {
+    avatarInput.value = '';
+  }
+});
+
+removeAvatarBtn.addEventListener('click', async () => {
+  hideMsg(avatarMsg);
+  const token = TokenStore.get(TOKEN_KEY);
+  if (!token) return showAuth();
+
+  try {
+    const data = await api('/api/my/avatar', { method: 'DELETE', token });
+    fillProfile(data.user);
+    showMsg(avatarMsg, 'Зураг устгагдлаа.', 'success');
+  } catch (err) {
+    showMsg(avatarMsg, err.message);
   }
 });
 
@@ -173,6 +236,30 @@ function showProfile() {
   showLoggedInNav('profile');
   hideMsg(profileMsg);
   hideMsg(passwordMsg);
+  hideMsg(avatarMsg);
+}
+
+function setAvatar(user) {
+  const initial = (user.name || '?').trim().charAt(0).toUpperCase() || '?';
+  avatarPlaceholder.textContent = initial;
+
+  if (user.avatar_url) {
+    avatarPreview.src = user.avatar_url + '?t=' + Date.now();
+    avatarPreview.classList.remove('hidden');
+    avatarPlaceholder.classList.add('hidden');
+  } else {
+    avatarPreview.removeAttribute('src');
+    avatarPreview.classList.add('hidden');
+    avatarPlaceholder.classList.remove('hidden');
+  }
+}
+
+function fillProfile(user) {
+  document.getElementById('profilePhone').value = user.phone || '';
+  document.getElementById('profileName').value = user.name || '';
+  document.getElementById('profileAddress').value = user.address || '';
+  document.getElementById('profileNote').value = user.profile_note || '';
+  setAvatar(user);
 }
 
 function renderStats(orders) {
@@ -214,9 +301,7 @@ function renderOrders(orders) {
       currentGroup = [o];
     }
   }
-  if (currentGroup.length > 0) {
-    groups.push(currentGroup);
-  }
+  if (currentGroup.length > 0) groups.push(currentGroup);
 
   body.innerHTML = groups
     .map((group) => {
@@ -264,8 +349,7 @@ async function loadProfile() {
 
   try {
     const data = await api('/api/my/profile', { token });
-    document.getElementById('profilePhone').value = data.user.phone;
-    document.getElementById('profileName').value = data.user.name;
+    fillProfile(data.user);
     passwordForm.reset();
     showProfile();
   } catch (err) {
@@ -274,5 +358,4 @@ async function loadProfile() {
   }
 }
 
-// On load
 loadDashboard();

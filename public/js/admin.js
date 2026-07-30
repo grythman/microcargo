@@ -236,6 +236,24 @@ document.getElementById('clearSearchBtn').addEventListener('click', () => {
   document.getElementById('searchPhone').value = '';
   loadOrders();
 });
+document.getElementById('exportOrdersBtn').addEventListener('click', async () => {
+  if (!token()) return showLogin();
+  const phone = document.getElementById('searchPhone').value.trim();
+  const qs = phone ? '?phone=' + encodeURIComponent(phone) : '';
+  try {
+    await downloadFile('/api/admin/orders/export' + qs, {
+      token: token(),
+      filename: phone ? `cargo-orders-${phone}.xlsx` : 'cargo-orders-all.xlsx',
+    });
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) {
+      TokenStore.clear(TOKEN_KEY);
+      showLogin();
+    } else {
+      alert(err.message);
+    }
+  }
+});
 
 // ---- Render ----
 function renderStats(orders) {

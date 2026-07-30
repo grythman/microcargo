@@ -3,10 +3,13 @@
 require('dotenv').config();
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const ExcelJS = require('exceljs');
 
 const db = require('./db');
 
@@ -15,15 +18,28 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
+const DATA_ROOT = process.env.DATA_ROOT || path.dirname(process.env.DB_PATH || path.join(__dirname, 'data', 'cargo.db'));
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(DATA_ROOT, 'uploads');
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const VALID_STATUSES = ['pending', 'in_transit', 'received'];
+const STATUS_LABELS = {
+  pending: 'Хүлээгдэж буй',
+  in_transit: 'Замд яваа',
+  received: 'Хүлээж авсан',
+};
 
 function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9+]/g, '').trim();
@@ -40,7 +56,6 @@ function getTokenFromRequest(req) {
   return null;
 }
 
-// Require a logged-in customer
 function requireCustomer(req, res, next) {
   const token = getTokenFromRequest(req);
   if (!token) return res.status(401).json({ error: 'Нэвтрэх шаардлагатай' });
@@ -56,7 +71,6 @@ function requireCustomer(req, res, next) {
   }
 }
 
-// Require a logged-in admin
 function requireAdmin(req, res, next) {
   const token = getTokenFromRequest(req);
   if (!token) return res.status(401).json({ error: 'Нэвтрэх шаардлагатай' });
@@ -73,10 +87,93 @@ function requireAdmin(req, res, next) {
 }
 
 function computeTotal(quantity, unitPrice, totalPrice) {
-  // If total is explicitly given (> 0), trust it. Otherwise compute it.
   const t = Number(totalPrice);
   if (t && t > 0) return t;
   return Number(quantity || 0) * Number(unitPrice || 0);
+}
+
+function publicCustomer(customer) {
+  return {
+    id: customer.id,
+    phone: customer.phone,
+    name: customer.name,
+    address: customer.address || '',
+    profile_note: customer.profile_note || '',
+    avatar_url: customer.avatar_path ? '/uploads/' + path.basename(customer.avatar_path) : null,
+    created_at: customer.created_at,
+  };
+}
+
+function deleteAvatarFile(avatarPath) {
+  if (!avatarPath) return;
+  const full = path.isAbsolute(avatarPath) ? avatarPath : path.join(UPLOAD_DIR, path.basename(avatarPath));
+  try {
+    if (fs.existsSync(full)) fs.unlinkSync(full);
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '.jpg';
+    cb(null, `avatar-${req.user.id}-${Date.now()}${safeExt}`);
+  },
+});
+
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) {
+      return cb(new Error('Зөвхөн jpg, png, webp, gif зураг оруулна уу'));
+    }
+    cb(null, true);
+  },
+}).single('avatar');
+
+async function buildOrdersWorkbook(orders) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Cargo';
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet('Захиалгууд');
+  sheet.columns = [
+    { header: 'Огноо', key: 'created_at', width: 18 },
+    { header: 'Утас', key: 'phone', width: 14 },
+    { header: 'Код', key: 'code', width: 22 },
+    { header: 'Тоо', key: 'quantity', width: 8 },
+    { header: 'Нэгж үнэ', key: 'unit_price', width: 12 },
+    { header: 'Нийт үнэ', key: 'total_price', width: 12 },
+    { header: 'Төлөв', key: 'status', width: 16 },
+    { header: 'Трак код', key: 'tracking_code', width: 18 },
+    { header: 'Тэмдэглэл', key: 'note', width: 28 },
+  ];
+
+  sheet.getRow(1).font = { bold: true };
+  sheet.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE2E8F0' },
+  };
+
+  for (const o of orders) {
+    sheet.addRow({
+      created_at: o.created_at,
+      phone: o.phone,
+      code: o.code || o.item_name,
+      quantity: o.quantity,
+      unit_price: Number(o.unit_price || 0),
+      total_price: Number(o.total_price || 0),
+      status: STATUS_LABELS[o.status] || o.status,
+      tracking_code: o.tracking_code || '',
+      note: o.note || '',
+    });
+  }
+
+  return workbook.xlsx.writeBuffer();
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +186,10 @@ const stmts = {
   insertCustomer: db.prepare(
     'INSERT INTO customers (phone, name, password_hash) VALUES (?, ?, ?)'
   ),
-  updateCustomerName: db.prepare('UPDATE customers SET name = ? WHERE id = ?'),
+  updateCustomerProfile: db.prepare(`
+    UPDATE customers SET name = ?, address = ?, profile_note = ? WHERE id = ?
+  `),
+  updateCustomerAvatar: db.prepare('UPDATE customers SET avatar_path = ? WHERE id = ?'),
   updateCustomerPassword: db.prepare('UPDATE customers SET password_hash = ? WHERE id = ?'),
   ordersByPhone: db.prepare(
     'SELECT * FROM orders WHERE phone = ? ORDER BY created_at DESC, id DESC'
@@ -115,7 +215,9 @@ const stmts = {
     WHERE id = @id
   `),
   deleteOrder: db.prepare('DELETE FROM orders WHERE id = ?'),
-  allCustomers: db.prepare('SELECT id, phone, name, created_at FROM customers ORDER BY created_at DESC'),
+  allCustomers: db.prepare(
+    'SELECT id, phone, name, address, profile_note, avatar_path, created_at FROM customers ORDER BY created_at DESC'
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -154,48 +256,83 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const token = signToken({ role: 'customer', id: customer.id, phone: customer.phone, name: customer.name });
-  res.json({ token, user: { id: customer.id, phone: customer.phone, name: customer.name } });
+  res.json({ token, user: publicCustomer(customer) });
 });
 
-// Customer: see only their own orders
 app.get('/api/my/orders', requireCustomer, (req, res) => {
   const orders = stmts.ordersByPhone.all(req.user.phone);
   res.json({ user: { phone: req.user.phone, name: req.user.name }, orders });
 });
 
-// Customer profile
+app.get('/api/my/orders/export', requireCustomer, async (req, res) => {
+  try {
+    const orders = stmts.ordersByPhone.all(req.user.phone);
+    const buffer = await buildOrdersWorkbook(orders);
+    const filename = `cargo-orders-${req.user.phone || 'me'}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    res.status(500).json({ error: 'Excel файл үүсгэж чадсангүй' });
+  }
+});
+
 app.get('/api/my/profile', requireCustomer, (req, res) => {
   const customer = stmts.findCustomerById.get(req.user.id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
-  res.json({
-    user: {
-      id: customer.id,
-      phone: customer.phone,
-      name: customer.name,
-      created_at: customer.created_at,
-    },
-  });
+  res.json({ user: publicCustomer(customer) });
 });
 
 app.put('/api/my/profile', requireCustomer, (req, res) => {
   const name = String(req.body.name || '').trim();
+  const address = String(req.body.address || '').trim();
+  const profile_note = String(req.body.profile_note || '').trim();
   if (!name) return res.status(400).json({ error: 'Нэрээ оруулна уу' });
 
   const customer = stmts.findCustomerById.get(req.user.id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
 
-  stmts.updateCustomerName.run(name, customer.id);
+  stmts.updateCustomerProfile.run(name, address, profile_note, customer.id);
+  const updated = stmts.findCustomerById.get(customer.id);
   const token = signToken({
     role: 'customer',
-    id: customer.id,
-    phone: customer.phone,
-    name,
+    id: updated.id,
+    phone: updated.phone,
+    name: updated.name,
   });
 
-  res.json({
-    token,
-    user: { id: customer.id, phone: customer.phone, name, created_at: customer.created_at },
+  res.json({ token, user: publicCustomer(updated) });
+});
+
+app.post('/api/my/avatar', requireCustomer, (req, res) => {
+  uploadAvatar(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE'
+        ? 'Зургийн хэмжээ 2MB-аас хэтрэхгүй байх ёстой'
+        : (err.message || 'Зураг оруулахад алдаа гарлаа');
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Зураг сонгоно уу' });
+
+    const customer = stmts.findCustomerById.get(req.user.id);
+    if (!customer) {
+      deleteAvatarFile(req.file.path);
+      return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+    }
+
+    deleteAvatarFile(customer.avatar_path);
+    stmts.updateCustomerAvatar.run(req.file.filename, customer.id);
+    const updated = stmts.findCustomerById.get(customer.id);
+    res.json({ user: publicCustomer(updated) });
   });
+});
+
+app.delete('/api/my/avatar', requireCustomer, (req, res) => {
+  const customer = stmts.findCustomerById.get(req.user.id);
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+  deleteAvatarFile(customer.avatar_path);
+  stmts.updateCustomerAvatar.run(null, customer.id);
+  res.json({ user: publicCustomer(stmts.findCustomerById.get(customer.id)) });
 });
 
 app.put('/api/my/password', requireCustomer, (req, res) => {
@@ -235,15 +372,29 @@ app.post('/api/admin/login', (req, res) => {
   res.json({ token, user: { username, role: 'admin' } });
 });
 
-// List all orders (optionally filter by phone)
 app.get('/api/admin/orders', requireAdmin, (req, res) => {
   const phone = normalizePhone(req.query.phone);
   const orders = phone ? stmts.ordersByPhone.all(phone) : stmts.allOrders.all();
   res.json({ orders });
 });
 
+app.get('/api/admin/orders/export', requireAdmin, async (req, res) => {
+  try {
+    const phone = normalizePhone(req.query.phone);
+    const orders = phone ? stmts.ordersByPhone.all(phone) : stmts.allOrders.all();
+    const buffer = await buildOrdersWorkbook(orders);
+    const filename = phone ? `cargo-orders-${phone}.xlsx` : 'cargo-orders-all.xlsx';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    res.status(500).json({ error: 'Excel файл үүсгэж чадсангүй' });
+  }
+});
+
 app.get('/api/admin/customers', requireAdmin, (req, res) => {
-  res.json({ customers: stmts.allCustomers.all() });
+  const customers = stmts.allCustomers.all().map(publicCustomer);
+  res.json({ customers });
 });
 
 function buildOrderPayload(body) {

@@ -85,11 +85,15 @@ cargo/
 | `POST` | `/api/auth/register` | Захиалагч бүртгүүлэх |
 | `POST` | `/api/auth/login` | Захиалагч нэвтрэх |
 | `GET`  | `/api/my/orders` | Нэвтэрсэн захиалагчийн захиалгууд |
+| `GET`  | `/api/my/orders/export` | Захиалгыг Excel (.xlsx) татах |
 | `GET`  | `/api/my/profile` | Профайл харах |
-| `PUT`  | `/api/my/profile` | Нэр шинэчлэх |
+| `PUT`  | `/api/my/profile` | Нэр / хаяг / тэмдэглэл шинэчлэх |
+| `POST` | `/api/my/avatar` | Профайл зураг оруулах |
+| `DELETE` | `/api/my/avatar` | Профайл зураг устгах |
 | `PUT`  | `/api/my/password` | Нууц үг солих |
 | `POST` | `/api/admin/login` | Админ нэвтрэх |
 | `GET`  | `/api/admin/orders?phone=` | Бүх (эсвэл дугаараар шүүсэн) захиалга |
+| `GET`  | `/api/admin/orders/export?phone=` | Захиалгыг Excel (.xlsx) татах |
 | `POST` | `/api/admin/orders` | Захиалга нэмэх |
 | `PUT`  | `/api/admin/orders/:id` | Захиалга засах |
 | `DELETE` | `/api/admin/orders/:id` | Захиалга устгах |

@@ -28,7 +28,6 @@
         <button id="tabRegister">Бүртгүүлэх</button>
       </div>
 
-      <!-- Login form -->
       <form id="loginForm">
         <label>Утасны дугаар</label>
         <input type="tel" id="loginPhone" placeholder="99112233" required />
@@ -37,7 +36,6 @@
         <button type="submit" class="btn full">Нэвтрэх</button>
       </form>
 
-      <!-- Register form -->
       <form id="registerForm" class="hidden">
         <label>Утасны дугаар</label>
         <input type="tel" id="regPhone" placeholder="99112233" required />
@@ -58,8 +56,13 @@
 
   <!-- ===================== DASHBOARD VIEW ===================== -->
   <div class="container hidden" id="dashView">
-    <h1 id="welcome">Сайн байна уу</h1>
-    <p class="subtitle" id="phoneLine"></p>
+    <div class="page-header">
+      <div>
+        <h1 id="welcome">Сайн байна уу</h1>
+        <p class="subtitle" id="phoneLine"></p>
+      </div>
+      <button type="button" class="btn secondary" id="exportOrdersBtn">Excel татах</button>
+    </div>
 
     <div class="stats" id="stats"></div>
 
@@ -88,7 +91,22 @@
   <!-- ===================== PROFILE VIEW ===================== -->
   <div class="container narrow hidden" id="profileView">
     <h1>Профайл</h1>
-    <p class="subtitle">Хувийн мэдээлэл болон нууц үгээ шинэчилнэ үү.</p>
+    <p class="subtitle">Хувийн мэдээлэл, зураг болон нууц үгээ шинэчилнэ үү.</p>
+
+    <div class="card profile-hero">
+      <div class="avatar-wrap">
+        <img id="avatarPreview" class="avatar" src="" alt="Профайл зураг" />
+        <div id="avatarPlaceholder" class="avatar placeholder">?</div>
+      </div>
+      <div class="avatar-actions">
+        <label class="btn secondary file-btn">
+          Зураг оруулах
+          <input type="file" id="avatarInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+        </label>
+        <button type="button" class="btn secondary" id="removeAvatarBtn">Устгах</button>
+      </div>
+      <div id="avatarMsg" class="msg hidden"></div>
+    </div>
 
     <div class="card">
       <h2>Хувийн мэдээлэл</h2>
@@ -98,6 +116,10 @@
         <p class="field-hint">Утасны дугаарыг солих боломжгүй (захиалгатай холбогдсон).</p>
         <label>Нэр</label>
         <input type="text" id="profileName" required />
+        <label>Хаяг</label>
+        <input type="text" id="profileAddress" placeholder="Хот / дүүрэг / хороо" />
+        <label>Тэмдэглэл</label>
+        <textarea id="profileNote" rows="3" placeholder="Хүргэлтийн тэмдэглэл гэх мэт"></textarea>
         <button type="submit" class="btn full">Хадгалах</button>
       </form>
       <div id="profileMsg" class="msg hidden"></div>

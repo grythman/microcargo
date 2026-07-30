@@ -52,4 +52,16 @@ if (!orderColumns.includes('code')) {
   db.exec("UPDATE orders SET code = item_name WHERE code = '' OR code IS NULL;");
 }
 
+const customerColumns = db.prepare('PRAGMA table_info(customers)').all().map((column) => column.name);
+const customerMigrations = [
+  ['avatar_path', 'TEXT'],
+  ['address', "TEXT NOT NULL DEFAULT ''"],
+  ['profile_note', "TEXT NOT NULL DEFAULT ''"],
+];
+for (const [name, type] of customerMigrations) {
+  if (!customerColumns.includes(name)) {
+    db.exec(`ALTER TABLE customers ADD COLUMN ${name} ${type};`);
+  }
+}
+
 module.exports = db;

@@ -71,3 +71,30 @@ function showMsg(el, text, type = 'error') {
 function hideMsg(el) {
   el.classList.add('hidden');
 }
+
+async function downloadFile(path, { token, filename } = {}) {
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+
+  const res = await fetch(path, { headers });
+  if (!res.ok) {
+    let message = 'Файл татаж чадсангүй';
+    try {
+      const data = await res.json();
+      if (data.error) message = data.error;
+    } catch (e) { /* no-op */ }
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || 'download.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
