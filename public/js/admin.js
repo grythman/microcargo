@@ -124,12 +124,21 @@ function showLogin() {
   loginView.classList.remove('hidden');
   panelView.classList.add('hidden');
   logoutLink.classList.add('hidden');
+  document.getElementById('topProfileBtn').classList.add('hidden');
 }
 
 function showPanel() {
   loginView.classList.add('hidden');
   panelView.classList.remove('hidden');
   logoutLink.classList.remove('hidden');
+  const topProfile = document.getElementById('topProfileBtn');
+  topProfile.classList.remove('hidden');
+  try {
+    const payload = JSON.parse(atob(token().split('.')[1]));
+    if (payload.username) {
+      document.getElementById('topProfileName').textContent = payload.username;
+    }
+  } catch (e) { /* ignore */ }
 }
 
 // ---- Form: add or update ----

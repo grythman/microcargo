@@ -29,9 +29,10 @@ a { color: #60a5fa; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 12px 24px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
+  gap: 16px;
 }
 
 .topbar .brand {
@@ -40,19 +41,111 @@ a { color: #60a5fa; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .topbar .brand .logo { font-size: 1.4rem; }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.topbar nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .topbar nav a {
-  margin-left: 16px;
+  margin-left: 12px;
   color: var(--muted);
   text-decoration: none;
   font-size: 0.95rem;
 }
+.topbar nav a:hover { color: var(--text); }
 .topbar nav a.active {
   color: var(--text);
   font-weight: 600;
+}
+
+.top-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  max-width: 220px;
+}
+.top-profile.active {
+  border-color: var(--primary);
+}
+
+button.top-profile {
+  appearance: none;
+}
+
+.top-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+.top-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.top-avatar img.hidden { display: none !important; }
+.top-avatar-initial {
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.top-avatar img:not(.hidden) ~ .top-avatar-initial {
+  display: none;
+}
+
+.top-profile-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-right: 4px;
+}
+.top-profile-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+.top-profile-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.1;
+}
+
+@media (max-width: 560px) {
+  .top-profile-meta { display: none; }
+  .top-profile { padding: 4px; }
 }
 
 .field-hint {

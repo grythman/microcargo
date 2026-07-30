@@ -9,12 +9,23 @@
 <body>
   <div class="topbar">
     <div class="brand"><span class="logo">📦</span> Cargo</div>
-    <nav>
-      <a href="#" id="ordersNavLink" class="hidden">Захиалга</a>
-      <a href="#" id="profileNavLink" class="hidden">Профайл</a>
-      <a href="/admin.html">Админ</a>
-      <a href="#" id="logoutLink" class="hidden">Гарах</a>
-    </nav>
+    <div class="topbar-right">
+      <nav>
+        <a href="#" id="ordersNavLink" class="hidden">Захиалга</a>
+        <a href="/admin.html">Админ</a>
+        <a href="#" id="logoutLink" class="hidden">Гарах</a>
+      </nav>
+      <button type="button" id="topProfileBtn" class="top-profile hidden" title="Профайл">
+        <span class="top-avatar">
+          <img id="topAvatarImg" alt="" class="hidden" />
+          <span id="topAvatarInitial" class="top-avatar-initial">?</span>
+        </span>
+        <span class="top-profile-meta">
+          <span id="topProfileName" class="top-profile-name">Профайл</span>
+          <span class="top-profile-label">Профайл</span>
+        </span>
+      </button>
+    </div>
   </div>
 
   <!-- ===================== AUTH VIEW ===================== -->

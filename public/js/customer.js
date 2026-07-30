@@ -8,7 +8,10 @@ const profileView = document.getElementById('profileView');
 const authMsg = document.getElementById('authMsg');
 const logoutLink = document.getElementById('logoutLink');
 const ordersNavLink = document.getElementById('ordersNavLink');
-const profileNavLink = document.getElementById('profileNavLink');
+const topProfileBtn = document.getElementById('topProfileBtn');
+const topAvatarImg = document.getElementById('topAvatarImg');
+const topAvatarInitial = document.getElementById('topAvatarInitial');
+const topProfileName = document.getElementById('topProfileName');
 
 const tabLogin = document.getElementById('tabLogin');
 const tabRegister = document.getElementById('tabRegister');
@@ -90,7 +93,7 @@ ordersNavLink.addEventListener('click', (e) => {
   loadDashboard();
 });
 
-profileNavLink.addEventListener('click', (e) => {
+topProfileBtn.addEventListener('click', (e) => {
   e.preventDefault();
   loadProfile();
 });
@@ -209,17 +212,17 @@ function showAuth() {
   profileView.classList.add('hidden');
   logoutLink.classList.add('hidden');
   ordersNavLink.classList.add('hidden');
-  profileNavLink.classList.add('hidden');
+  topProfileBtn.classList.add('hidden');
   ordersNavLink.classList.remove('active');
-  profileNavLink.classList.remove('active');
+  topProfileBtn.classList.remove('active');
 }
 
 function showLoggedInNav(active) {
   logoutLink.classList.remove('hidden');
   ordersNavLink.classList.remove('hidden');
-  profileNavLink.classList.remove('hidden');
+  topProfileBtn.classList.remove('hidden');
   ordersNavLink.classList.toggle('active', active === 'orders');
-  profileNavLink.classList.toggle('active', active === 'profile');
+  topProfileBtn.classList.toggle('active', active === 'profile');
 }
 
 function showDash() {
@@ -239,9 +242,25 @@ function showProfile() {
   hideMsg(avatarMsg);
 }
 
+function setTopProfile(user) {
+  const name = user.name || 'Профайл';
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
+  topProfileName.textContent = name;
+  topAvatarInitial.textContent = initial;
+
+  if (user.avatar_url) {
+    topAvatarImg.src = user.avatar_url + '?t=' + Date.now();
+    topAvatarImg.classList.remove('hidden');
+  } else {
+    topAvatarImg.removeAttribute('src');
+    topAvatarImg.classList.add('hidden');
+  }
+}
+
 function setAvatar(user) {
   const initial = (user.name || '?').trim().charAt(0).toUpperCase() || '?';
   avatarPlaceholder.textContent = initial;
+  setTopProfile(user);
 
   if (user.avatar_url) {
     avatarPreview.src = user.avatar_url + '?t=' + Date.now();
@@ -331,11 +350,15 @@ async function loadDashboard() {
   if (!token) return showAuth();
 
   try {
-    const data = await api('/api/my/orders', { token });
-    document.getElementById('welcome').textContent = `Сайн байна уу, ${data.user.name}!`;
-    document.getElementById('phoneLine').textContent = `Утас: ${data.user.phone}`;
-    renderStats(data.orders);
-    renderOrders(data.orders);
+    const [ordersData, profileData] = await Promise.all([
+      api('/api/my/orders', { token }),
+      api('/api/my/profile', { token }),
+    ]);
+    document.getElementById('welcome').textContent = `Сайн байна уу, ${ordersData.user.name}!`;
+    document.getElementById('phoneLine').textContent = `Утас: ${ordersData.user.phone}`;
+    setTopProfile(profileData.user);
+    renderStats(ordersData.orders);
+    renderOrders(ordersData.orders);
     showDash();
   } catch (err) {
     TokenStore.clear(TOKEN_KEY);
