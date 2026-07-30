@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: microcargo
+    name: cargo
     runtime: node
     plan: starter
     buildCommand: npm install
@@ -11,7 +11,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: DB_PATH
-        value: /var/data/microcargo.db
+        value: /var/data/cargo.db
       - key: JWT_SECRET
         generateValue: true
       - key: ADMIN_USERNAME
@@ -19,6 +19,6 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
     disk:
-      name: microcargo-data
+      name: cargo-data
       mountPath: /var/data
       sizeGB: 1

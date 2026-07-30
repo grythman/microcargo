@@ -1,6 +1,6 @@
 'use strict';
 
-// Shared helpers for the MicroCargo frontend.
+// Shared helpers for the Cargo frontend.
 
 const STATUS_LABELS = {
   pending: 'Хүлээгдэж буй',

@@ -1,4 +1,4 @@
-# 📦 MicroCargo
+# 📦 Cargo
 
 Карго бизнест зориулсан энгийн захиалга бүртгэх веб сайт.
 
@@ -42,7 +42,7 @@ npm start
 | `JWT_SECRET` | Нэвтрэлтийн токен баталгаажуулах нууц түлхүүр (заавал солих) | — |
 | `ADMIN_USERNAME` | Админ нэвтрэх нэр | `admin` |
 | `ADMIN_PASSWORD` | Админ нууц үг | `admin123` |
-| `DB_PATH` | SQLite өгөгдлийн сангийн файлын зам | `./data/microcargo.db` |
+| `DB_PATH` | SQLite өгөгдлийн сангийн файлын зам | `./data/cargo.db` |
 
 > ⚠️ Production дээр заавал `JWT_SECRET`-ийг урт, санамсаргүй утгаар, `ADMIN_PASSWORD`-ийг хүчтэй нууц үгээр солино уу.
 
@@ -63,13 +63,13 @@ npm start
 ### Төслийн бүтэц
 
 ```
-microcargo/
+cargo/
 ├── server.js          # Express сервер ба API
 ├── db.js              # SQLite холболт ба хүснэгтүүд
 ├── package.json
 ├── .env.example
 └── public/            # Frontend
-    ├── index.html     # Захиалагчийн хэсэг (нэвтрэх + захиалга харах)
+    ├── index.html     # Захиалагчийн хэсэг (нэвтрэх + захиалга харах + профайл)
     ├── admin.html     # Админ хэсэг
     ├── css/style.css
     └── js/
@@ -85,6 +85,9 @@ microcargo/
 | `POST` | `/api/auth/register` | Захиалагч бүртгүүлэх |
 | `POST` | `/api/auth/login` | Захиалагч нэвтрэх |
 | `GET`  | `/api/my/orders` | Нэвтэрсэн захиалагчийн захиалгууд |
+| `GET`  | `/api/my/profile` | Профайл харах |
+| `PUT`  | `/api/my/profile` | Нэр шинэчлэх |
+| `PUT`  | `/api/my/password` | Нууц үг солих |
 | `POST` | `/api/admin/login` | Админ нэвтрэх |
 | `GET`  | `/api/admin/orders?phone=` | Бүх (эсвэл дугаараар шүүсэн) захиалга |
 | `POST` | `/api/admin/orders` | Захиалга нэмэх |

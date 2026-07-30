@@ -1,16 +1,23 @@
 'use strict';
 
-const TOKEN_KEY = 'mc_customer_token';
+const TOKEN_KEY = 'cargo_customer_token';
 
 const authView = document.getElementById('authView');
 const dashView = document.getElementById('dashView');
+const profileView = document.getElementById('profileView');
 const authMsg = document.getElementById('authMsg');
 const logoutLink = document.getElementById('logoutLink');
+const ordersNavLink = document.getElementById('ordersNavLink');
+const profileNavLink = document.getElementById('profileNavLink');
 
 const tabLogin = document.getElementById('tabLogin');
 const tabRegister = document.getElementById('tabRegister');
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
+const profileForm = document.getElementById('profileForm');
+const passwordForm = document.getElementById('passwordForm');
+const profileMsg = document.getElementById('profileMsg');
+const passwordMsg = document.getElementById('passwordMsg');
 
 // ---- Tab switching ----
 tabLogin.addEventListener('click', () => {
@@ -75,16 +82,97 @@ logoutLink.addEventListener('click', (e) => {
   showAuth();
 });
 
+ordersNavLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  loadDashboard();
+});
+
+profileNavLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  loadProfile();
+});
+
+profileForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideMsg(profileMsg);
+  const token = TokenStore.get(TOKEN_KEY);
+  if (!token) return showAuth();
+
+  try {
+    const data = await api('/api/my/profile', {
+      method: 'PUT',
+      token,
+      body: { name: document.getElementById('profileName').value },
+    });
+    TokenStore.set(TOKEN_KEY, data.token);
+    showMsg(profileMsg, 'Мэдээлэл хадгалагдлаа.', 'success');
+  } catch (err) {
+    showMsg(profileMsg, err.message);
+  }
+});
+
+passwordForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideMsg(passwordMsg);
+  const token = TokenStore.get(TOKEN_KEY);
+  if (!token) return showAuth();
+
+  const newPassword = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('newPasswordConfirm').value;
+  if (newPassword !== confirm) {
+    showMsg(passwordMsg, 'Шинэ нууц үг таарахгүй байна');
+    return;
+  }
+
+  try {
+    await api('/api/my/password', {
+      method: 'PUT',
+      token,
+      body: {
+        currentPassword: document.getElementById('currentPassword').value,
+        newPassword,
+      },
+    });
+    passwordForm.reset();
+    showMsg(passwordMsg, 'Нууц үг амжилттай солигдлоо.', 'success');
+  } catch (err) {
+    showMsg(passwordMsg, err.message);
+  }
+});
+
 function showAuth() {
   authView.classList.remove('hidden');
   dashView.classList.add('hidden');
+  profileView.classList.add('hidden');
   logoutLink.classList.add('hidden');
+  ordersNavLink.classList.add('hidden');
+  profileNavLink.classList.add('hidden');
+  ordersNavLink.classList.remove('active');
+  profileNavLink.classList.remove('active');
+}
+
+function showLoggedInNav(active) {
+  logoutLink.classList.remove('hidden');
+  ordersNavLink.classList.remove('hidden');
+  profileNavLink.classList.remove('hidden');
+  ordersNavLink.classList.toggle('active', active === 'orders');
+  profileNavLink.classList.toggle('active', active === 'profile');
 }
 
 function showDash() {
   authView.classList.add('hidden');
   dashView.classList.remove('hidden');
-  logoutLink.classList.remove('hidden');
+  profileView.classList.add('hidden');
+  showLoggedInNav('orders');
+}
+
+function showProfile() {
+  authView.classList.add('hidden');
+  dashView.classList.add('hidden');
+  profileView.classList.remove('hidden');
+  showLoggedInNav('profile');
+  hideMsg(profileMsg);
+  hideMsg(passwordMsg);
 }
 
 function renderStats(orders) {
@@ -119,7 +207,6 @@ function renderOrders(orders) {
   const groups = [];
   let currentGroup = [];
   for (const o of orders) {
-    // Group consecutive items by the exact same time (since batch items are created at the same time)
     if (currentGroup.length === 0 || currentGroup[0].created_at === o.created_at) {
       currentGroup.push(o);
     } else {
@@ -166,7 +253,22 @@ async function loadDashboard() {
     renderOrders(data.orders);
     showDash();
   } catch (err) {
-    // Token invalid/expired -> back to login
+    TokenStore.clear(TOKEN_KEY);
+    showAuth();
+  }
+}
+
+async function loadProfile() {
+  const token = TokenStore.get(TOKEN_KEY);
+  if (!token) return showAuth();
+
+  try {
+    const data = await api('/api/my/profile', { token });
+    document.getElementById('profilePhone').value = data.user.phone;
+    document.getElementById('profileName').value = data.user.name;
+    passwordForm.reset();
+    showProfile();
+  } catch (err) {
     TokenStore.clear(TOKEN_KEY);
     showAuth();
   }

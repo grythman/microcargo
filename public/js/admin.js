@@ -1,6 +1,6 @@
 'use strict';
 
-const TOKEN_KEY = 'mc_admin_token';
+const TOKEN_KEY = 'cargo_admin_token';
 
 const loginView = document.getElementById('loginView');
 const panelView = document.getElementById('panelView');

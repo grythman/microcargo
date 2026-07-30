@@ -50,7 +50,22 @@ a { color: #60a5fa; }
   text-decoration: none;
   font-size: 0.95rem;
 }
-.topbar nav a:hover { color: var(--text); }
+.topbar nav a.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+input[readonly] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 
 .container {
   max-width: 1000px;

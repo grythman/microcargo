@@ -85,9 +85,12 @@ function computeTotal(quantity, unitPrice, totalPrice) {
 
 const stmts = {
   findCustomerByPhone: db.prepare('SELECT * FROM customers WHERE phone = ?'),
+  findCustomerById: db.prepare('SELECT * FROM customers WHERE id = ?'),
   insertCustomer: db.prepare(
     'INSERT INTO customers (phone, name, password_hash) VALUES (?, ?, ?)'
   ),
+  updateCustomerName: db.prepare('UPDATE customers SET name = ? WHERE id = ?'),
+  updateCustomerPassword: db.prepare('UPDATE customers SET password_hash = ? WHERE id = ?'),
   ordersByPhone: db.prepare(
     'SELECT * FROM orders WHERE phone = ? ORDER BY created_at DESC, id DESC'
   ),
@@ -158,6 +161,62 @@ app.post('/api/auth/login', (req, res) => {
 app.get('/api/my/orders', requireCustomer, (req, res) => {
   const orders = stmts.ordersByPhone.all(req.user.phone);
   res.json({ user: { phone: req.user.phone, name: req.user.name }, orders });
+});
+
+// Customer profile
+app.get('/api/my/profile', requireCustomer, (req, res) => {
+  const customer = stmts.findCustomerById.get(req.user.id);
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+  res.json({
+    user: {
+      id: customer.id,
+      phone: customer.phone,
+      name: customer.name,
+      created_at: customer.created_at,
+    },
+  });
+});
+
+app.put('/api/my/profile', requireCustomer, (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Нэрээ оруулна уу' });
+
+  const customer = stmts.findCustomerById.get(req.user.id);
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+
+  stmts.updateCustomerName.run(name, customer.id);
+  const token = signToken({
+    role: 'customer',
+    id: customer.id,
+    phone: customer.phone,
+    name,
+  });
+
+  res.json({
+    token,
+    user: { id: customer.id, phone: customer.phone, name, created_at: customer.created_at },
+  });
+});
+
+app.put('/api/my/password', requireCustomer, (req, res) => {
+  const currentPassword = String(req.body.currentPassword || '');
+  const newPassword = String(req.body.newPassword || '');
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Хуучин болон шинэ нууц үгээ оруулна уу' });
+  }
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: 'Шинэ нууц үг доод тал нь 4 тэмдэгт байх ёстой' });
+  }
+
+  const customer = stmts.findCustomerById.get(req.user.id);
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+  if (!bcrypt.compareSync(currentPassword, customer.password_hash)) {
+    return res.status(401).json({ error: 'Хуучин нууц үг буруу байна' });
+  }
+
+  stmts.updateCustomerPassword.run(bcrypt.hashSync(newPassword, 10), customer.id);
+  res.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -242,7 +301,7 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 
 if (require.main === module && !process.env.VERCEL) {
   app.listen(PORT, () => {
-    console.log(`MicroCargo server running on http://localhost:${PORT}`);
+    console.log(`Cargo server running on http://localhost:${PORT}`);
   });
 }
 

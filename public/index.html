@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MicroCargo — Миний захиалга</title>
+  <title>Cargo — Миний захиалга</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <div class="topbar">
-    <div class="brand"><span class="logo">📦</span> MicroCargo</div>
+    <div class="brand"><span class="logo">📦</span> Cargo</div>
     <nav>
+      <a href="#" id="ordersNavLink" class="hidden">Захиалга</a>
+      <a href="#" id="profileNavLink" class="hidden">Профайл</a>
       <a href="/admin.html">Админ</a>
       <a href="#" id="logoutLink" class="hidden">Гарах</a>
     </nav>
@@ -80,6 +82,39 @@
         </table>
       </div>
       <div id="ordersEmpty" class="empty hidden">Танд одоогоор бүртгэгдсэн захиалга алга байна.</div>
+    </div>
+  </div>
+
+  <!-- ===================== PROFILE VIEW ===================== -->
+  <div class="container narrow hidden" id="profileView">
+    <h1>Профайл</h1>
+    <p class="subtitle">Хувийн мэдээлэл болон нууц үгээ шинэчилнэ үү.</p>
+
+    <div class="card">
+      <h2>Хувийн мэдээлэл</h2>
+      <form id="profileForm">
+        <label>Утасны дугаар</label>
+        <input type="tel" id="profilePhone" readonly />
+        <p class="field-hint">Утасны дугаарыг солих боломжгүй (захиалгатай холбогдсон).</p>
+        <label>Нэр</label>
+        <input type="text" id="profileName" required />
+        <button type="submit" class="btn full">Хадгалах</button>
+      </form>
+      <div id="profileMsg" class="msg hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Нууц үг солих</h2>
+      <form id="passwordForm">
+        <label>Хуучин нууц үг</label>
+        <input type="password" id="currentPassword" required />
+        <label>Шинэ нууц үг</label>
+        <input type="password" id="newPassword" placeholder="доод тал нь 4 тэмдэгт" required />
+        <label>Шинэ нууц үг давтах</label>
+        <input type="password" id="newPasswordConfirm" required />
+        <button type="submit" class="btn full">Нууц үг солих</button>
+      </form>
+      <div id="passwordMsg" class="msg hidden"></div>
     </div>
   </div>
 
