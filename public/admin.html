@@ -11,21 +11,22 @@
     <div class="brand"><span class="logo">📦</span> Cargo · Админ</div>
     <div class="topbar-right">
       <nav>
+        <a href="#" id="ordersNavLink" class="hidden">Захиалга</a>
         <a href="/">Захиалагчийн хэсэг</a>
         <a href="#" id="logoutLink" class="hidden">Гарах</a>
       </nav>
-      <div id="topProfileBtn" class="top-profile hidden" title="Админ">
+      <button type="button" id="topProfileBtn" class="top-profile hidden" title="Профайл">
         <span class="top-avatar">
-          <span class="top-avatar-initial">А</span>
+          <img id="topAvatarImg" alt="" class="hidden" />
+          <span id="topAvatarInitial" class="top-avatar-initial">А</span>
         </span>
         <span class="top-profile-meta">
           <span id="topProfileName" class="top-profile-name">Админ</span>
-          <span class="top-profile-label">Оператор</span>
+          <span class="top-profile-label">Профайл</span>
         </span>
-      </div>
+      </button>
     </div>
   </div>
-
   <!-- ===================== ADMIN LOGIN ===================== -->
   <div class="container narrow" id="loginView">
     <div class="card">
@@ -157,6 +158,60 @@
         </table>
       </div>
       <div id="ordersEmpty" class="empty hidden">Захиалга алга байна.</div>
+    </div>
+  </div>
+
+  <!-- ===================== ADMIN PROFILE ===================== -->
+  <div class="container narrow hidden" id="profileView">
+    <h1>Профайл</h1>
+    <p class="subtitle">Хувийн мэдээлэл, зураг болон нууц үгээ шинэчилнэ үү.</p>
+
+    <div class="card profile-hero">
+      <div class="avatar-wrap">
+        <img id="avatarPreview" class="avatar" src="" alt="Профайл зураг" />
+        <div id="avatarPlaceholder" class="avatar placeholder">А</div>
+      </div>
+      <div class="avatar-actions">
+        <label class="btn secondary file-btn">
+          Зураг оруулах
+          <input type="file" id="avatarInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+        </label>
+        <button type="button" class="btn secondary" id="removeAvatarBtn">Устгах</button>
+      </div>
+      <div id="avatarMsg" class="msg hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Хувийн мэдээлэл</h2>
+      <form id="profileForm">
+        <label>Нэвтрэх нэр</label>
+        <input type="text" id="profileUsername" readonly />
+        <p class="field-hint">Нэвтрэх нэрийг солих боломжгүй.</p>
+        <label>Нэр</label>
+        <input type="text" id="profileName" required />
+        <label>Утасны дугаар</label>
+        <input type="tel" id="profilePhone" placeholder="99112233" />
+        <label>Хаяг</label>
+        <input type="text" id="profileAddress" placeholder="Хот / дүүрэг / хороо" />
+        <label>Тэмдэглэл</label>
+        <textarea id="profileNote" rows="3" placeholder="Тэмдэглэл"></textarea>
+        <button type="submit" class="btn full">Хадгалах</button>
+      </form>
+      <div id="profileMsg" class="msg hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Нууц үг солих</h2>
+      <form id="passwordForm">
+        <label>Хуучин нууц үг</label>
+        <input type="password" id="currentPassword" required />
+        <label>Шинэ нууц үг</label>
+        <input type="password" id="newPassword" placeholder="доод тал нь 4 тэмдэгт" required />
+        <label>Шинэ нууц үг давтах</label>
+        <input type="password" id="newPasswordConfirm" required />
+        <button type="submit" class="btn full">Нууц үг солих</button>
+      </form>
+      <div id="passwordMsg" class="msg hidden"></div>
     </div>
   </div>
 

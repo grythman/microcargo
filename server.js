@@ -104,6 +104,31 @@ function publicCustomer(customer) {
   };
 }
 
+function publicAdmin(admin) {
+  return {
+    id: admin.id,
+    username: admin.username,
+    name: admin.name,
+    phone: admin.phone || '',
+    address: admin.address || '',
+    profile_note: admin.profile_note || '',
+    avatar_url: admin.avatar_path ? '/uploads/' + path.basename(admin.avatar_path) : null,
+    role: 'admin',
+    created_at: admin.created_at,
+  };
+}
+
+function ensureAdminSeeded() {
+  const existing = db.prepare('SELECT id FROM admins LIMIT 1').get();
+  if (existing) return;
+  const hash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+  db.prepare(
+    'INSERT INTO admins (username, name, password_hash) VALUES (?, ?, ?)'
+  ).run(ADMIN_USERNAME, 'Админ', hash);
+}
+
+ensureAdminSeeded();
+
 function deleteAvatarFile(avatarPath) {
   if (!avatarPath) return;
   const full = path.isAbsolute(avatarPath) ? avatarPath : path.join(UPLOAD_DIR, path.basename(avatarPath));
@@ -119,7 +144,8 @@ const avatarStorage = multer.diskStorage({
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
     const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '.jpg';
-    cb(null, `avatar-${req.user.id}-${Date.now()}${safeExt}`);
+    const role = (req.user && req.user.role) || 'user';
+    cb(null, `avatar-${role}-${req.user.id}-${Date.now()}${safeExt}`);
   },
 });
 
@@ -218,6 +244,13 @@ const stmts = {
   allCustomers: db.prepare(
     'SELECT id, phone, name, address, profile_note, avatar_path, created_at FROM customers ORDER BY created_at DESC'
   ),
+  findAdminByUsername: db.prepare('SELECT * FROM admins WHERE username = ?'),
+  findAdminById: db.prepare('SELECT * FROM admins WHERE id = ?'),
+  updateAdminProfile: db.prepare(`
+    UPDATE admins SET name = ?, phone = ?, address = ?, profile_note = ? WHERE id = ?
+  `),
+  updateAdminAvatar: db.prepare('UPDATE admins SET avatar_path = ? WHERE id = ?'),
+  updateAdminPassword: db.prepare('UPDATE admins SET password_hash = ? WHERE id = ?'),
 };
 
 // ---------------------------------------------------------------------------
@@ -364,12 +397,96 @@ app.post('/api/admin/login', (req, res) => {
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
 
-  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+  ensureAdminSeeded();
+  const admin = stmts.findAdminByUsername.get(username);
+  if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
     return res.status(401).json({ error: 'Админ нэр эсвэл нууц үг буруу байна' });
   }
 
-  const token = signToken({ role: 'admin', username });
-  res.json({ token, user: { username, role: 'admin' } });
+  const token = signToken({
+    role: 'admin',
+    id: admin.id,
+    username: admin.username,
+    name: admin.name,
+  });
+  res.json({ token, user: publicAdmin(admin) });
+});
+app.get('/api/admin/profile', requireAdmin, (req, res) => {
+  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+  if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
+  res.json({ user: publicAdmin(admin) });
+});
+
+app.put('/api/admin/profile', requireAdmin, (req, res) => {
+  const name = String(req.body.name || '').trim();
+  const phone = String(req.body.phone || '').trim();
+  const address = String(req.body.address || '').trim();
+  const profile_note = String(req.body.profile_note || '').trim();
+  if (!name) return res.status(400).json({ error: 'Нэрээ оруулна уу' });
+
+  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+  if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
+
+  stmts.updateAdminProfile.run(name, phone, address, profile_note, admin.id);
+  const updated = stmts.findAdminById.get(admin.id);
+  const token = signToken({
+    role: 'admin',
+    id: updated.id,
+    username: updated.username,
+    name: updated.name,
+  });
+  res.json({ token, user: publicAdmin(updated) });
+});
+
+app.post('/api/admin/avatar', requireAdmin, (req, res) => {
+  uploadAvatar(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE'
+        ? 'Зургийн хэмжээ 2MB-аас хэтрэхгүй байх ёстой'
+        : (err.message || 'Зураг оруулахад алдаа гарлаа');
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Зураг сонгоно уу' });
+
+    const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+    if (!admin) {
+      deleteAvatarFile(req.file.path);
+      return res.status(404).json({ error: 'Админ олдсонгүй' });
+    }
+
+    deleteAvatarFile(admin.avatar_path);
+    stmts.updateAdminAvatar.run(req.file.filename, admin.id);
+    res.json({ user: publicAdmin(stmts.findAdminById.get(admin.id)) });
+  });
+});
+
+app.delete('/api/admin/avatar', requireAdmin, (req, res) => {
+  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+  if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
+  deleteAvatarFile(admin.avatar_path);
+  stmts.updateAdminAvatar.run(null, admin.id);
+  res.json({ user: publicAdmin(stmts.findAdminById.get(admin.id)) });
+});
+
+app.put('/api/admin/password', requireAdmin, (req, res) => {
+  const currentPassword = String(req.body.currentPassword || '');
+  const newPassword = String(req.body.newPassword || '');
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Хуучин болон шинэ нууц үгээ оруулна уу' });
+  }
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: 'Шинэ нууц үг доод тал нь 4 тэмдэгт байх ёстой' });
+  }
+
+  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+  if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
+  if (!bcrypt.compareSync(currentPassword, admin.password_hash)) {
+    return res.status(401).json({ error: 'Хуучин нууц үг буруу байна' });
+  }
+
+  stmts.updateAdminPassword.run(bcrypt.hashSync(newPassword, 10), admin.id);
+  res.json({ ok: true });
 });
 
 app.get('/api/admin/orders', requireAdmin, (req, res) => {

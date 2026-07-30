@@ -64,4 +64,18 @@ for (const [name, type] of customerMigrations) {
   }
 }
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS admins (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    avatar_path   TEXT,
+    phone         TEXT NOT NULL DEFAULT '',
+    address       TEXT NOT NULL DEFAULT '',
+    profile_note  TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 module.exports = db;
