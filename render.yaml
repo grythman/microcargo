@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: microcargo
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20.20.0"
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/microcargo.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+    disk:
+      name: microcargo-data
+      mountPath: /var/data
+      sizeGB: 1
