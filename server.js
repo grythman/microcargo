@@ -215,8 +215,15 @@ const stmts = {
   updateCustomerProfile: db.prepare(`
     UPDATE customers SET name = ?, address = ?, profile_note = ? WHERE id = ?
   `),
+  updateCustomerAdmin: db.prepare(`
+    UPDATE customers SET phone = ?, name = ?, address = ?, profile_note = ? WHERE id = ?
+  `),
   updateCustomerAvatar: db.prepare('UPDATE customers SET avatar_path = ? WHERE id = ?'),
   updateCustomerPassword: db.prepare('UPDATE customers SET password_hash = ? WHERE id = ?'),
+  deleteCustomer: db.prepare('DELETE FROM customers WHERE id = ?'),
+  deleteOrdersByPhone: db.prepare('DELETE FROM orders WHERE phone = ?'),
+  updateOrdersPhone: db.prepare('UPDATE orders SET phone = ? WHERE phone = ?'),
+  countOrdersByPhone: db.prepare('SELECT COUNT(*) AS count FROM orders WHERE phone = ?'),
   ordersByPhone: db.prepare(
     'SELECT * FROM orders WHERE phone = ? ORDER BY created_at DESC, id DESC'
   ),
@@ -244,6 +251,12 @@ const stmts = {
   allCustomers: db.prepare(
     'SELECT id, phone, name, address, profile_note, avatar_path, created_at FROM customers ORDER BY created_at DESC'
   ),
+  searchCustomers: db.prepare(`
+    SELECT id, phone, name, address, profile_note, avatar_path, created_at
+    FROM customers
+    WHERE phone LIKE ? OR name LIKE ? OR address LIKE ?
+    ORDER BY created_at DESC
+  `),
   findAdminByUsername: db.prepare('SELECT * FROM admins WHERE username = ?'),
   findAdminById: db.prepare('SELECT * FROM admins WHERE id = ?'),
   updateAdminProfile: db.prepare(`
@@ -510,8 +523,97 @@ app.get('/api/admin/orders/export', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/admin/customers', requireAdmin, (req, res) => {
-  const customers = stmts.allCustomers.all().map(publicCustomer);
+  const q = String(req.query.q || '').trim();
+  const rows = q
+    ? stmts.searchCustomers.all(`%${q}%`, `%${q}%`, `%${q}%`)
+    : stmts.allCustomers.all();
+
+  const customers = rows.map((c) => ({
+    ...publicCustomer(c),
+    order_count: stmts.countOrdersByPhone.get(c.phone).count,
+  }));
   res.json({ customers });
+});
+
+app.get('/api/admin/customers/:id', requireAdmin, (req, res) => {
+  const customer = stmts.findCustomerById.get(Number(req.params.id));
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+  const orders = stmts.ordersByPhone.all(customer.phone);
+  res.json({
+    user: {
+      ...publicCustomer(customer),
+      order_count: orders.length,
+    },
+    orders,
+  });
+});
+
+app.put('/api/admin/customers/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const customer = stmts.findCustomerById.get(id);
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+
+  const phone = normalizePhone(req.body.phone);
+  const name = String(req.body.name || '').trim();
+  const address = String(req.body.address || '').trim();
+  const profile_note = String(req.body.profile_note || '').trim();
+
+  if (!phone || !name) {
+    return res.status(400).json({ error: 'Утас болон нэр заавал шаардлагатай' });
+  }
+
+  const phoneOwner = stmts.findCustomerByPhone.get(phone);
+  if (phoneOwner && phoneOwner.id !== id) {
+    return res.status(409).json({ error: 'Энэ утасны дугаар өөр хэрэглэгчид бүртгэлтэй байна' });
+  }
+
+  const updateCustomerAndOrders = db.transaction(() => {
+    if (phone !== customer.phone) {
+      stmts.updateOrdersPhone.run(phone, customer.phone);
+    }
+    stmts.updateCustomerAdmin.run(phone, name, address, profile_note, id);
+  });
+  updateCustomerAndOrders();
+
+  const updated = stmts.findCustomerById.get(id);
+  res.json({
+    user: {
+      ...publicCustomer(updated),
+      order_count: stmts.countOrdersByPhone.get(updated.phone).count,
+    },
+  });
+});
+
+app.put('/api/admin/customers/:id/password', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const customer = stmts.findCustomerById.get(id);
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+
+  const newPassword = String(req.body.newPassword || '');
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: 'Нууц үг доод тал нь 4 тэмдэгт байх ёстой' });
+  }
+
+  stmts.updateCustomerPassword.run(bcrypt.hashSync(newPassword, 10), id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/customers/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const customer = stmts.findCustomerById.get(id);
+  if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+
+  const deleteWithOrders = String(req.query.deleteOrders || '') === '1';
+  const remove = db.transaction(() => {
+    if (deleteWithOrders) {
+      stmts.deleteOrdersByPhone.run(customer.phone);
+    }
+    deleteAvatarFile(customer.avatar_path);
+    stmts.deleteCustomer.run(id);
+  });
+  remove();
+
+  res.json({ ok: true });
 });
 
 function buildOrderPayload(body) {

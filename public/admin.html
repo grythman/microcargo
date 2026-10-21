@@ -3,15 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cargo — Админ</title>
+  <title>Cargo — Админ 🎃</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
-<body>
+<body class="halloween">
+  <div class="halloween-bg" aria-hidden="true"></div>
   <div class="topbar">
-    <div class="brand"><span class="logo">📦</span> Cargo · Админ</div>
+    <div class="brand"><span class="logo">🎃</span> Cargo · Админ</div>
     <div class="topbar-right">
       <nav>
         <a href="#" id="ordersNavLink" class="hidden">Захиалга</a>
+        <a href="#" id="usersNavLink" class="hidden">Хэрэглэгчид</a>
         <a href="/">Захиалагчийн хэсэг</a>
         <a href="#" id="logoutLink" class="hidden">Гарах</a>
       </nav>
@@ -158,6 +160,79 @@
         </table>
       </div>
       <div id="ordersEmpty" class="empty hidden">Захиалга алга байна.</div>
+    </div>
+  </div>
+
+  <!-- ===================== USERS MANAGEMENT ===================== -->
+  <div class="container hidden" id="usersView">
+    <h1>Хэрэглэгчийн удирдлага</h1>
+    <p class="subtitle">Бүртгэлтэй захиалагчдыг харах, засах, устгах.</p>
+
+    <div class="stats" id="usersStats"></div>
+
+    <div class="card">
+      <div class="toolbar">
+        <div class="grow">
+          <label>Хайх (утас / нэр / хаяг)</label>
+          <input type="text" id="userSearch" placeholder="Жишээ: 9911 эсвэл Бат" />
+        </div>
+        <button class="btn" id="userSearchBtn">Хайх</button>
+        <button class="btn secondary" id="userClearBtn">Цэвэрлэх</button>
+      </div>
+      <div class="table-wrap">
+        <table id="usersTable">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Нэр</th>
+              <th>Утас</th>
+              <th>Хаяг</th>
+              <th>Захиалга</th>
+              <th>Бүртгэсэн</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+      <div id="usersEmpty" class="empty hidden">Хэрэглэгч алга байна.</div>
+    </div>
+
+    <div class="card hidden" id="userEditCard">
+      <h2 id="userEditTitle">Хэрэглэгч засах</h2>
+      <form id="userEditForm">
+        <input type="hidden" id="editUserId" />
+        <div class="row">
+          <div>
+            <label>Нэр *</label>
+            <input type="text" id="editUserName" required />
+          </div>
+          <div>
+            <label>Утас *</label>
+            <input type="tel" id="editUserPhone" required />
+          </div>
+        </div>
+        <label>Хаяг</label>
+        <input type="text" id="editUserAddress" />
+        <label>Тэмдэглэл</label>
+        <textarea id="editUserNote" rows="2"></textarea>
+        <div class="actions" style="margin-top:16px;">
+          <button type="submit" class="btn">Хадгалах</button>
+          <button type="button" class="btn secondary" id="userEditCancelBtn">Болих</button>
+        </div>
+        <div id="userEditMsg" class="msg hidden"></div>
+      </form>
+
+      <hr class="soft-hr" />
+      <h3 class="section-title">Нууц үг reset</h3>
+      <form id="userPasswordForm" class="row" style="align-items:flex-end;">
+        <div class="grow">
+          <label>Шинэ нууц үг</label>
+          <input type="text" id="editUserPassword" placeholder="доод тал нь 4 тэмдэгт" required />
+        </div>
+        <button type="submit" class="btn secondary">Reset</button>
+      </form>
+      <div id="userPasswordMsg" class="msg hidden"></div>
     </div>
   </div>
 

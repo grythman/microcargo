@@ -4,11 +4,20 @@ const TOKEN_KEY = 'cargo_admin_token';
 
 const loginView = document.getElementById('loginView');
 const panelView = document.getElementById('panelView');
+const usersView = document.getElementById('usersView');
 const profileView = document.getElementById('profileView');
 const logoutLink = document.getElementById('logoutLink');
 const ordersNavLink = document.getElementById('ordersNavLink');
+const usersNavLink = document.getElementById('usersNavLink');
 const loginMsg = document.getElementById('loginMsg');
 const formMsg = document.getElementById('formMsg');
+const userEditMsg = document.getElementById('userEditMsg');
+const userPasswordMsg = document.getElementById('userPasswordMsg');
+const userEditCard = document.getElementById('userEditCard');
+const userEditForm = document.getElementById('userEditForm');
+const userPasswordForm = document.getElementById('userPasswordForm');
+
+let currentUsers = [];
 
 const topProfileBtn = document.getElementById('topProfileBtn');
 const topAvatarImg = document.getElementById('topAvatarImg');
@@ -131,9 +140,67 @@ ordersNavLink.addEventListener('click', (e) => {
   loadOrders(document.getElementById('searchPhone').value);
 });
 
+usersNavLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  showUsers();
+  loadUsers();
+});
+
 topProfileBtn.addEventListener('click', (e) => {
   e.preventDefault();
   loadProfile();
+});
+
+document.getElementById('userSearchBtn').addEventListener('click', () => {
+  loadUsers(document.getElementById('userSearch').value);
+});
+document.getElementById('userClearBtn').addEventListener('click', () => {
+  document.getElementById('userSearch').value = '';
+  loadUsers();
+});
+document.getElementById('userEditCancelBtn').addEventListener('click', () => {
+  userEditCard.classList.add('hidden');
+  hideMsg(userEditMsg);
+  hideMsg(userPasswordMsg);
+});
+
+userEditForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideMsg(userEditMsg);
+  const id = document.getElementById('editUserId').value;
+  try {
+    await api('/api/admin/customers/' + id, {
+      method: 'PUT',
+      token: token(),
+      body: {
+        name: document.getElementById('editUserName').value,
+        phone: document.getElementById('editUserPhone').value,
+        address: document.getElementById('editUserAddress').value,
+        profile_note: document.getElementById('editUserNote').value,
+      },
+    });
+    showMsg(userEditMsg, 'Хэрэглэгч хадгалагдлаа.', 'success');
+    loadUsers(document.getElementById('userSearch').value);
+  } catch (err) {
+    showMsg(userEditMsg, err.message);
+  }
+});
+
+userPasswordForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideMsg(userPasswordMsg);
+  const id = document.getElementById('editUserId').value;
+  try {
+    await api('/api/admin/customers/' + id + '/password', {
+      method: 'PUT',
+      token: token(),
+      body: { newPassword: document.getElementById('editUserPassword').value },
+    });
+    document.getElementById('editUserPassword').value = '';
+    showMsg(userPasswordMsg, 'Нууц үг reset хийгдлээ.', 'success');
+  } catch (err) {
+    showMsg(userPasswordMsg, err.message);
+  }
 });
 
 profileForm.addEventListener('submit', async (e) => {
@@ -228,37 +295,160 @@ removeAvatarBtn.addEventListener('click', async () => {
 function showLogin() {
   loginView.classList.remove('hidden');
   panelView.classList.add('hidden');
+  usersView.classList.add('hidden');
   profileView.classList.add('hidden');
   logoutLink.classList.add('hidden');
   ordersNavLink.classList.add('hidden');
+  usersNavLink.classList.add('hidden');
   topProfileBtn.classList.add('hidden');
   ordersNavLink.classList.remove('active');
+  usersNavLink.classList.remove('active');
   topProfileBtn.classList.remove('active');
 }
 
 function showLoggedInNav(active) {
   logoutLink.classList.remove('hidden');
   ordersNavLink.classList.remove('hidden');
+  usersNavLink.classList.remove('hidden');
   topProfileBtn.classList.remove('hidden');
   ordersNavLink.classList.toggle('active', active === 'orders');
+  usersNavLink.classList.toggle('active', active === 'users');
   topProfileBtn.classList.toggle('active', active === 'profile');
 }
 
 function showPanel() {
   loginView.classList.add('hidden');
   panelView.classList.remove('hidden');
+  usersView.classList.add('hidden');
   profileView.classList.add('hidden');
   showLoggedInNav('orders');
+}
+
+function showUsers() {
+  loginView.classList.add('hidden');
+  panelView.classList.add('hidden');
+  usersView.classList.remove('hidden');
+  profileView.classList.add('hidden');
+  userEditCard.classList.add('hidden');
+  showLoggedInNav('users');
 }
 
 function showProfile() {
   loginView.classList.add('hidden');
   panelView.classList.add('hidden');
+  usersView.classList.add('hidden');
   profileView.classList.remove('hidden');
   showLoggedInNav('profile');
   hideMsg(profileMsg);
   hideMsg(passwordMsg);
   hideMsg(avatarMsg);
+}
+
+function renderUsersStats(users) {
+  const total = users.length;
+  const withOrders = users.filter((u) => Number(u.order_count) > 0).length;
+  const ordersSum = users.reduce((s, u) => s + Number(u.order_count || 0), 0);
+  document.getElementById('usersStats').innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Нийт хэрэглэгч</div></div>
+    <div class="stat"><div class="num">${withOrders}</div><div class="lbl">Захиалгатай</div></div>
+    <div class="stat"><div class="num">${ordersSum}</div><div class="lbl">Нийт захиалга</div></div>
+  `;
+}
+
+function userAvatarHtml(user) {
+  const initial = (user.name || '?').trim().charAt(0).toUpperCase() || '?';
+  if (user.avatar_url) {
+    return `<span class="user-avatar"><img src="${escapeHtml(user.avatar_url)}" alt="" /></span>`;
+  }
+  return `<span class="user-avatar">${escapeHtml(initial)}</span>`;
+}
+
+function startUserEdit(user) {
+  document.getElementById('editUserId').value = user.id;
+  document.getElementById('editUserName').value = user.name || '';
+  document.getElementById('editUserPhone').value = user.phone || '';
+  document.getElementById('editUserAddress').value = user.address || '';
+  document.getElementById('editUserNote').value = user.profile_note || '';
+  document.getElementById('editUserPassword').value = '';
+  document.getElementById('userEditTitle').textContent = 'Хэрэглэгч засах — ' + (user.name || user.phone);
+  userEditCard.classList.remove('hidden');
+  hideMsg(userEditMsg);
+  hideMsg(userPasswordMsg);
+  userEditCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function deleteUser(id) {
+  const user = currentUsers.find((u) => u.id == id);
+  if (!user) return;
+  if (!confirm(`"${user.name}" (${user.phone}) хэрэглэгчийг устгах уу?`)) return;
+  const alsoOrders = confirm('Түүний захиалгуудыг ч хамт устгах уу?');
+  try {
+    const qs = alsoOrders ? '?deleteOrders=1' : '';
+    await api('/api/admin/customers/' + id + qs, { method: 'DELETE', token: token() });
+    userEditCard.classList.add('hidden');
+    loadUsers(document.getElementById('userSearch').value);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function renderUsers(users) {
+  const body = document.getElementById('usersBody');
+  const empty = document.getElementById('usersEmpty');
+  const table = document.getElementById('usersTable');
+
+  if (!users.length) {
+    body.innerHTML = '';
+    empty.classList.remove('hidden');
+    table.classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  table.classList.remove('hidden');
+
+  body.innerHTML = users.map((u) => `
+    <tr>
+      <td>${userAvatarHtml(u)}</td>
+      <td>${escapeHtml(u.name)}</td>
+      <td>${escapeHtml(u.phone)}</td>
+      <td>${escapeHtml(u.address) || '<span class="muted">—</span>'}</td>
+      <td>${Number(u.order_count || 0)}</td>
+      <td>${formatDate(u.created_at)}</td>
+      <td>
+        <div class="actions">
+          <button class="btn small secondary" data-user-edit="${u.id}">Засах</button>
+          <button class="btn small danger" data-user-del="${u.id}">Устгах</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('[data-user-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const user = currentUsers.find((u) => u.id == btn.dataset.userEdit);
+      if (user) startUserEdit(user);
+    });
+  });
+  body.querySelectorAll('[data-user-del]').forEach((btn) => {
+    btn.addEventListener('click', () => deleteUser(btn.dataset.userDel));
+  });
+}
+
+async function loadUsers(q) {
+  try {
+    const qs = q ? '?q=' + encodeURIComponent(q) : '';
+    const data = await api('/api/admin/customers' + qs, { token: token() });
+    currentUsers = data.customers;
+    renderUsersStats(data.customers);
+    renderUsers(data.customers);
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) {
+      TokenStore.clear(TOKEN_KEY);
+      showLogin();
+    } else {
+      alert(err.message);
+    }
+  }
 }
 
 function setTopProfile(user) {
