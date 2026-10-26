@@ -282,15 +282,14 @@ function fillProfile(user) {
 }
 
 function renderStats(orders) {
-  const total = orders.length;
-  const received = orders.filter((o) => o.status === 'received').length;
-  const pending = orders.filter((o) => o.status !== 'received').length;
-  const totalDue = orders.reduce((sum, o) => sum + Number(o.total_price || 0), 0);
+  const rows = consolidateOrderRows(orders);
+  const total = rows.length;
+  const qtySum = rows.reduce((sum, o) => sum + Number(o.quantity || 1), 0);
+  const totalDue = rows.reduce((sum, o) => sum + Number(o.total_price || 0), 0);
 
   document.getElementById('stats').innerHTML = `
-    <div class="stat"><div class="num">${total}</div><div class="lbl">Нийт захиалга</div></div>
-    <div class="stat"><div class="num">${received}</div><div class="lbl">Хүлээж авсан</div></div>
-    <div class="stat"><div class="num">${pending}</div><div class="lbl">Хүлээгдэж буй</div></div>
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Барааны төрөл</div></div>
+    <div class="stat"><div class="num">${qtySum}</div><div class="lbl">Нийт ширхэг</div></div>
     <div class="stat"><div class="num">${formatMoney(totalDue)}</div><div class="lbl">Нийт дүн</div></div>
   `;
 }
@@ -299,8 +298,9 @@ function renderOrders(orders) {
   const body = document.getElementById('ordersBody');
   const empty = document.getElementById('ordersEmpty');
   const table = document.getElementById('ordersTable');
+  const consolidated = consolidateOrderRows(orders);
 
-  if (!orders.length) {
+  if (!consolidated.length) {
     body.innerHTML = '';
     empty.classList.remove('hidden');
     table.classList.add('hidden');
@@ -312,7 +312,7 @@ function renderOrders(orders) {
 
   const groups = [];
   let currentGroup = [];
-  for (const o of orders) {
+  for (const o of consolidated) {
     if (currentGroup.length === 0 || currentGroup[0].created_at === o.created_at) {
       currentGroup.push(o);
     } else {
@@ -326,6 +326,7 @@ function renderOrders(orders) {
     .map((group) => {
       let html = '';
       const rowspan = group.length;
+      const groupTotal = group.reduce((s, o) => s + Number(o.total_price || 0), 0);
       group.forEach((o, index) => {
         html += `<tr>`;
         if (index === 0) {
@@ -333,6 +334,7 @@ function renderOrders(orders) {
         }
         html += `
           <td>${escapeHtml(o.code || o.item_name)}</td>
+          <td>${Number(o.quantity || 1)}</td>
           <td>${formatMoney(o.unit_price)}</td>
           <td>${formatMoney(o.total_price)}</td>
           <td>${statusBadge(o.status)}</td>
@@ -340,6 +342,11 @@ function renderOrders(orders) {
           <td>${escapeHtml(o.note) || '<span class="muted">—</span>'}</td>
         </tr>`;
       });
+      html += `<tr class="group-total-row">
+        <td colspan="4" style="text-align:right; color: var(--muted); font-weight:600;">Багцын нийт</td>
+        <td style="font-weight:700; color: var(--amber);">${formatMoney(groupTotal)}</td>
+        <td colspan="3"></td>
+      </tr>`;
       return html;
     })
     .join('');

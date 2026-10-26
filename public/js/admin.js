@@ -45,12 +45,15 @@ let lineItems = [];
 
 function token() { return TokenStore.get(TOKEN_KEY); }
 
-function calcItemTotal(unitPrice) {
-  return Number(unitPrice || 0);
+function calcItemTotal(unitPrice, quantity) {
+  return lineTotal(unitPrice, quantity);
 }
 
 function updateGrandTotal() {
-  const total = lineItems.reduce((sum, item) => sum + calcItemTotal(item.unit_price), 0);
+  const total = lineItems.reduce(
+    (sum, item) => sum + calcItemTotal(item.unit_price, item.quantity),
+    0
+  );
   document.getElementById('grandTotal').textContent = formatMoney(total);
   const section = document.getElementById('grandTotalSection');
   section.style.display = lineItems.length > 0 ? 'block' : 'none';
@@ -74,8 +77,9 @@ function renderLineItems() {
   body.innerHTML = lineItems.map((item, idx) => `
     <tr>
       <td>${escapeHtml(item.code)}</td>
+      <td>${item.quantity}</td>
       <td>${formatMoney(item.unit_price)}</td>
-      <td>${formatMoney(calcItemTotal(item.unit_price))}</td>
+      <td>${formatMoney(calcItemTotal(item.unit_price, item.quantity))}</td>
       <td>
         <button type="button" class="btn small danger" data-remove="${idx}" style="padding: 4px 8px; font-size: 0.75rem;">Устгах</button>
       </td>
@@ -97,14 +101,24 @@ function renderLineItems() {
 document.getElementById('addItemBtn').addEventListener('click', (e) => {
   e.preventDefault();
   const code = document.getElementById('fCode').value.trim();
+  const quantity = Math.max(1, Number(document.getElementById('fQty').value || 1));
   const unitPrice = Number(document.getElementById('fUnit').value || 0);
   if (!code) {
     alert('Код оруулна уу');
     return;
   }
-  lineItems.push({ code, unit_price: unitPrice });
+  // Ижил код (+ ижил нэгж үнэ) байвал ширхэг нэмнэ — давхар мөр үүсгэхгүй
+  const existing = lineItems.find(
+    (item) => item.code === code && Number(item.unit_price) === unitPrice
+  );
+  if (existing) {
+    existing.quantity += quantity;
+  } else {
+    lineItems.push({ code, quantity, unit_price: unitPrice });
+  }
   renderLineItems();
   document.getElementById('fCode').value = '';
+  document.getElementById('fQty').value = '1';
   document.getElementById('fUnit').value = '0';
 });
 
@@ -523,13 +537,24 @@ orderForm.addEventListener('submit', async (e) => {
 
   try {
     if (id) {
+      const qty = Math.max(1, Number(document.getElementById('fQtyEdit').value || 1));
+      const unit = Number(document.getElementById('fUnitEdit').value || 0);
+      const totalInput = document.getElementById('fTotalEdit').value;
       const payload = {
         phone,
         code: document.getElementById('fCodeEdit').value,
-        unit_price: document.getElementById('fUnitEdit').value,
-        total_price: document.getElementById('fTotalEdit').value || calcItemTotal(document.getElementById('fUnitEdit').value),
+        quantity: qty,
+        unit_price: unit,
+        total_price: totalInput ? Number(totalInput) : calcItemTotal(unit, qty),
       };
       await api('/api/admin/orders/' + id, { method: 'PUT', body: payload, token: token() });
+
+      // Нэгтгэсэн давхар мөрүүдийг устгана (хадгалсан үндсэн мөрөөс бусад)
+      const extraIds = (window._editExtraIds || []).filter((x) => String(x) !== String(id));
+      for (const extraId of extraIds) {
+        await api('/api/admin/orders/' + extraId, { method: 'DELETE', token: token() });
+      }
+      window._editExtraIds = [];
       showMsg(formMsg, 'Захиалга шинэчлэгдлээ.', 'success');
     } else {
       if (lineItems.length === 0) {
@@ -542,13 +567,14 @@ orderForm.addEventListener('submit', async (e) => {
           body: {
             phone,
             code: item.code,
+            quantity: item.quantity,
             unit_price: item.unit_price,
-            total_price: calcItemTotal(item.unit_price),
+            total_price: calcItemTotal(item.unit_price, item.quantity),
           },
           token: token(),
         });
       }
-      showMsg(formMsg, `${lineItems.length} захиалга нэмэгдлээ.`, 'success');
+      showMsg(formMsg, `${lineItems.length} бараа нэмэгдлээ.`, 'success');
     }
 
     resetForm();
@@ -564,7 +590,9 @@ function resetForm() {
   orderForm.reset();
   document.getElementById('orderId').value = '';
   document.getElementById('fCode').value = '';
+  document.getElementById('fQty').value = '1';
   document.getElementById('fUnit').value = '0';
+  window._editExtraIds = [];
   lineItems = [];
   renderLineItems();
   formTitle.textContent = 'Шинэ захиалга нэмэх';
@@ -578,8 +606,10 @@ function startEdit(order) {
   document.getElementById('orderId').value = order.id;
   document.getElementById('fPhone').value = order.phone;
   document.getElementById('fCodeEdit').value = order.code || order.item_name;
+  document.getElementById('fQtyEdit').value = order.quantity || 1;
   document.getElementById('fUnitEdit').value = order.unit_price;
   document.getElementById('fTotalEdit').value = order.total_price;
+  window._editExtraIds = (order.ids || [order.id]).filter((x) => String(x) !== String(order.id));
   document.getElementById('batchEntrySection').style.display = 'none';
   document.getElementById('editModeSection').style.display = 'block';
   formTitle.textContent = 'Захиалга засах #' + order.id;
@@ -589,10 +619,13 @@ function startEdit(order) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-async function deleteOrder(id) {
-  if (!confirm('Энэ захиалгыг устгах уу?')) return;
+async function deleteOrder(id, extraIds) {
+  if (!confirm('Энэ барааг устгах уу?')) return;
   try {
-    await api('/api/admin/orders/' + id, { method: 'DELETE', token: token() });
+    const ids = [id].concat(extraIds || []).filter(Boolean);
+    for (const orderId of ids) {
+      await api('/api/admin/orders/' + orderId, { method: 'DELETE', token: token() });
+    }
     loadOrders(document.getElementById('searchPhone').value);
   } catch (err) {
     alert(err.message);
@@ -626,14 +659,13 @@ document.getElementById('exportOrdersBtn').addEventListener('click', async () =>
 });
 
 function renderStats(orders) {
-  const total = orders.length;
-  const received = orders.filter((o) => o.status === 'received').length;
-  const pending = orders.filter((o) => o.status !== 'received').length;
-  const sum = orders.reduce((s, o) => s + Number(o.total_price || 0), 0);
+  const rows = consolidateOrderRows(orders);
+  const total = rows.length;
+  const qtySum = rows.reduce((s, o) => s + Number(o.quantity || 1), 0);
+  const sum = rows.reduce((s, o) => s + Number(o.total_price || 0), 0);
   document.getElementById('stats').innerHTML = `
-    <div class="stat"><div class="num">${total}</div><div class="lbl">Нийт захиалга</div></div>
-    <div class="stat"><div class="num">${received}</div><div class="lbl">Хүлээж авсан</div></div>
-    <div class="stat"><div class="num">${pending}</div><div class="lbl">Хүлээгдэж буй</div></div>
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Барааны төрөл</div></div>
+    <div class="stat"><div class="num">${qtySum}</div><div class="lbl">Нийт ширхэг</div></div>
     <div class="stat"><div class="num">${formatMoney(sum)}</div><div class="lbl">Нийт дүн</div></div>
   `;
 }
@@ -642,8 +674,9 @@ function renderOrders(orders) {
   const body = document.getElementById('ordersBody');
   const empty = document.getElementById('ordersEmpty');
   const table = document.getElementById('ordersTable');
+  const consolidated = consolidateOrderRows(orders);
 
-  if (!orders.length) {
+  if (!consolidated.length) {
     body.innerHTML = '';
     empty.classList.remove('hidden');
     table.classList.add('hidden');
@@ -654,7 +687,7 @@ function renderOrders(orders) {
 
   const groups = [];
   let currentGroup = [];
-  for (const o of orders) {
+  for (const o of consolidated) {
     if (currentGroup.length === 0 || currentGroup[0].phone === o.phone) {
       currentGroup.push(o);
     } else {
@@ -668,6 +701,7 @@ function renderOrders(orders) {
     .map((group) => {
       let html = '';
       const rowspan = group.length;
+      const groupTotal = group.reduce((s, o) => s + Number(o.total_price || 0), 0);
       group.forEach((o, index) => {
         html += `<tr>`;
         if (index === 0) {
@@ -676,28 +710,37 @@ function renderOrders(orders) {
         }
         html += `
           <td>${escapeHtml(o.code || o.item_name)}</td>
+          <td>${Number(o.quantity || 1)}</td>
           <td>${formatMoney(o.unit_price)}</td>
           <td>${formatMoney(o.total_price)}</td>
           <td>
             <div class="actions">
               <button class="btn small secondary" data-edit="${o.id}">Засах</button>
-              <button class="btn small danger" data-del="${o.id}">Устгах</button>
+              <button class="btn small danger" data-del="${o.id}" data-extra="${(o.ids || []).filter((x) => x != o.id).join(',')}">Устгах</button>
             </div>
           </td>
         </tr>`;
       });
+      html += `<tr class="group-total-row">
+        <td colspan="5" style="text-align:right; color: var(--muted); font-weight:600;">Утасны нийт</td>
+        <td style="font-weight:700; color: var(--amber);">${formatMoney(groupTotal)}</td>
+        <td></td>
+      </tr>`;
       return html;
     })
     .join('');
 
   body.querySelectorAll('[data-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const order = currentOrders.find((o) => o.id == btn.dataset.edit);
+      const order = consolidated.find((o) => o.id == btn.dataset.edit);
       if (order) startEdit(order);
     });
   });
   body.querySelectorAll('[data-del]').forEach((btn) => {
-    btn.addEventListener('click', () => deleteOrder(btn.dataset.del));
+    btn.addEventListener('click', () => {
+      const extra = (btn.dataset.extra || '').split(',').filter(Boolean);
+      deleteOrder(btn.dataset.del, extra);
+    });
   });
 }
 

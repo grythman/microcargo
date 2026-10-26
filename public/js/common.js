@@ -72,6 +72,40 @@ function hideMsg(el) {
   el.classList.add('hidden');
 }
 
+/** Ижил утас+код+нэгж үнэтэй мөрүүдийг нэгтгэж ширхэг/нийт тооцоолно */
+function consolidateOrderRows(orders) {
+  const map = new Map();
+  for (const o of orders) {
+    const code = String(o.code || o.item_name || '').trim();
+    const unit = Number(o.unit_price || 0);
+    const key = `${o.phone || ''}|${code}|${unit}`;
+    const qty = Math.max(1, Number(o.quantity || 1));
+    if (!map.has(key)) {
+      map.set(key, {
+        ...o,
+        code,
+        quantity: qty,
+        unit_price: unit,
+        total_price: unit * qty,
+        ids: [o.id],
+      });
+    } else {
+      const g = map.get(key);
+      g.quantity += qty;
+      g.total_price = g.unit_price * g.quantity;
+      g.ids.push(o.id);
+      if (o.created_at && (!g.created_at || o.created_at < g.created_at)) {
+        g.created_at = o.created_at;
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+function lineTotal(unitPrice, quantity) {
+  return Number(unitPrice || 0) * Math.max(1, Number(quantity || 1));
+}
+
 async function downloadFile(path, { token, filename } = {}) {
   const headers = {};
   if (token) headers['Authorization'] = 'Bearer ' + token;
