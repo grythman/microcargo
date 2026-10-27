@@ -340,7 +340,6 @@ function renderOrders(orders) {
         }
         html += `
           <td>${statusBadge(o.status)}</td>
-          <td>${escapeHtml(o.tracking_code) || '<span class="muted">—</span>'}</td>
           <td>${escapeHtml(o.note) || '<span class="muted">—</span>'}</td>
         </tr>`;
       });
