@@ -5,7 +5,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
-const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -27,8 +27,17 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 
 const app = express();
 app.use(express.json());
-app.use(cookieParser());
 app.use('/uploads', express.static(UPLOAD_DIR));
+
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api', apiLimiter);
 
 const VALID_STATUSES = db.ORDER_STATUSES;
 const STATUS_LABELS = {
@@ -48,7 +57,6 @@ function signToken(payload) {
 function getTokenFromRequest(req) {
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) return auth.slice(7);
-  if (req.cookies && req.cookies.token) return req.cookies.token;
   return null;
 }
 
@@ -116,9 +124,11 @@ function publicAdmin(admin) {
 
 function deleteAvatarFile(avatarPath) {
   if (!avatarPath) return;
-  const full = path.isAbsolute(avatarPath) ? avatarPath : path.join(UPLOAD_DIR, path.basename(avatarPath));
+  const candidate = path.resolve(UPLOAD_DIR, path.basename(String(avatarPath)));
+  const uploadsRoot = path.resolve(UPLOAD_DIR) + path.sep;
+  if (!candidate.startsWith(uploadsRoot)) return;
   try {
-    if (fs.existsSync(full)) fs.unlinkSync(full);
+    if (fs.existsSync(candidate)) fs.unlinkSync(candidate);
   } catch {
     /* ignore */
   }

@@ -20,7 +20,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
     "@supabase/supabase-js": "^2.57.4",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "express-rate-limit": "^7.5.0"
   },
   "license": "MIT"
 }
