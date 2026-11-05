@@ -42,7 +42,9 @@ npm start
 | `JWT_SECRET` | Нэвтрэлтийн токен баталгаажуулах нууц түлхүүр (заавал солих) | — |
 | `ADMIN_USERNAME` | Админ нэвтрэх нэр | `admin` |
 | `ADMIN_PASSWORD` | Админ нууц үг | `admin123` |
-| `DB_PATH` | SQLite өгөгдлийн сангийн файлын зам | `./data/cargo.db` |
+| `SUPABASE_URL` | Supabase төслийн URL | — |
+| `SUPABASE_ANON_KEY` | Supabase public anon key | — |
+| `DATABASE_URL` | Supabase Postgres Session Pooler холболт | — |
 
 > ⚠️ Production дээр заавал `JWT_SECRET`-ийг урт, санамсаргүй утгаар, `ADMIN_PASSWORD`-ийг хүчтэй нууц үгээр солино уу.
 
@@ -56,7 +58,7 @@ npm start
 ## Техникийн мэдээлэл
 
 - **Backend**: Node.js + Express
-- **Өгөгдлийн сан**: SQLite (`better-sqlite3`) — нэг файлд хадгалагдана
+- **Өгөгдлийн сан**: Supabase Postgres (`pg`)
 - **Нэвтрэлт**: JWT токен, нууц үг `bcrypt`-ээр хэшлэгдэнэ
 - **Frontend**: энгийн HTML/CSS/JavaScript (build хэрэггүй)
 
@@ -65,7 +67,9 @@ npm start
 ```
 cargo/
 ├── server.js          # Express сервер ба API
-├── db.js              # SQLite холболт ба хүснэгтүүд
+├── lib/supabase.js    # Supabase/Postgres client
+├── db.js              # DB helper функцууд
+├── supabase/schema.sql # Supabase SQL schema + RLS policy
 ├── package.json
 ├── .env.example
 └── public/            # Frontend

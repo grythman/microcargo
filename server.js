@@ -18,7 +18,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-const DATA_ROOT = process.env.DATA_ROOT || path.dirname(process.env.DB_PATH || path.join(__dirname, 'data', 'cargo.db'));
+const DATA_ROOT = process.env.DATA_ROOT || path.join(__dirname, 'data');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(DATA_ROOT, 'uploads');
 
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -30,11 +30,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static(UPLOAD_DIR));
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const VALID_STATUSES = ['pending', 'in_transit', 'received'];
+const VALID_STATUSES = db.ORDER_STATUSES;
 const STATUS_LABELS = {
   pending: 'Хүлээгдэж буй',
   in_transit: 'Замд яваа',
@@ -66,7 +62,7 @@ function requireCustomer(req, res, next) {
     }
     req.user = decoded;
     next();
-  } catch (e) {
+  } catch {
     return res.status(401).json({ error: 'Нэвтрэлт хүчингүй боллоо' });
   }
 }
@@ -81,7 +77,7 @@ function requireAdmin(req, res, next) {
     }
     req.user = decoded;
     next();
-  } catch (e) {
+  } catch {
     return res.status(401).json({ error: 'Нэвтрэлт хүчингүй боллоо' });
   }
 }
@@ -118,23 +114,12 @@ function publicAdmin(admin) {
   };
 }
 
-function ensureAdminSeeded() {
-  const existing = db.prepare('SELECT id FROM admins LIMIT 1').get();
-  if (existing) return;
-  const hash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-  db.prepare(
-    'INSERT INTO admins (username, name, password_hash) VALUES (?, ?, ?)'
-  ).run(ADMIN_USERNAME, 'Админ', hash);
-}
-
-ensureAdminSeeded();
-
 function deleteAvatarFile(avatarPath) {
   if (!avatarPath) return;
   const full = path.isAbsolute(avatarPath) ? avatarPath : path.join(UPLOAD_DIR, path.basename(avatarPath));
   try {
     if (fs.existsSync(full)) fs.unlinkSync(full);
-  } catch (e) {
+  } catch {
     /* ignore */
   }
 }
@@ -190,7 +175,7 @@ async function buildOrdersWorkbook(orders) {
       created_at: o.created_at,
       phone: o.phone,
       code: o.code || o.item_name,
-      quantity: o.quantity,
+      quantity: Number(o.quantity || 0),
       unit_price: Number(o.unit_price || 0),
       total_price: Number(o.total_price || 0),
       status: STATUS_LABELS[o.status] || o.status,
@@ -202,75 +187,40 @@ async function buildOrdersWorkbook(orders) {
   return workbook.xlsx.writeBuffer();
 }
 
-// ---------------------------------------------------------------------------
-// Prepared statements
-// ---------------------------------------------------------------------------
+function asyncHandler(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
 
-const stmts = {
-  findCustomerByPhone: db.prepare('SELECT * FROM customers WHERE phone = ?'),
-  findCustomerById: db.prepare('SELECT * FROM customers WHERE id = ?'),
-  insertCustomer: db.prepare(
-    'INSERT INTO customers (phone, name, password_hash) VALUES (?, ?, ?)'
-  ),
-  updateCustomerProfile: db.prepare(`
-    UPDATE customers SET name = ?, address = ?, profile_note = ? WHERE id = ?
-  `),
-  updateCustomerAdmin: db.prepare(`
-    UPDATE customers SET phone = ?, name = ?, address = ?, profile_note = ? WHERE id = ?
-  `),
-  updateCustomerAvatar: db.prepare('UPDATE customers SET avatar_path = ? WHERE id = ?'),
-  updateCustomerPassword: db.prepare('UPDATE customers SET password_hash = ? WHERE id = ?'),
-  deleteCustomer: db.prepare('DELETE FROM customers WHERE id = ?'),
-  deleteOrdersByPhone: db.prepare('DELETE FROM orders WHERE phone = ?'),
-  updateOrdersPhone: db.prepare('UPDATE orders SET phone = ? WHERE phone = ?'),
-  countOrdersByPhone: db.prepare('SELECT COUNT(*) AS count FROM orders WHERE phone = ?'),
-  ordersByPhone: db.prepare(
-    'SELECT * FROM orders WHERE phone = ? ORDER BY created_at DESC, id DESC'
-  ),
-  allOrders: db.prepare('SELECT * FROM orders ORDER BY created_at DESC, id DESC'),
-  orderById: db.prepare('SELECT * FROM orders WHERE id = ?'),
-  insertOrder: db.prepare(`
-    INSERT INTO orders (phone, code, item_name, quantity, unit_price, total_price, status, tracking_code, note)
-    VALUES (@phone, @code, @item_name, @quantity, @unit_price, @total_price, @status, @tracking_code, @note)
-  `),
-  updateOrder: db.prepare(`
-    UPDATE orders SET
-      phone = @phone,
-      code = @code,
-      item_name = @item_name,
-      quantity = @quantity,
-      unit_price = @unit_price,
-      total_price = @total_price,
-      status = @status,
-      tracking_code = @tracking_code,
-      note = @note,
-      updated_at = datetime('now')
-    WHERE id = @id
-  `),
-  deleteOrder: db.prepare('DELETE FROM orders WHERE id = ?'),
-  allCustomers: db.prepare(
-    'SELECT id, phone, name, address, profile_note, avatar_path, created_at FROM customers ORDER BY created_at DESC'
-  ),
-  searchCustomers: db.prepare(`
-    SELECT id, phone, name, address, profile_note, avatar_path, created_at
-    FROM customers
-    WHERE phone LIKE ? OR name LIKE ? OR address LIKE ?
-    ORDER BY created_at DESC
-  `),
-  findAdminByUsername: db.prepare('SELECT * FROM admins WHERE username = ?'),
-  findAdminById: db.prepare('SELECT * FROM admins WHERE id = ?'),
-  updateAdminProfile: db.prepare(`
-    UPDATE admins SET name = ?, phone = ?, address = ?, profile_note = ? WHERE id = ?
-  `),
-  updateAdminAvatar: db.prepare('UPDATE admins SET avatar_path = ? WHERE id = ?'),
-  updateAdminPassword: db.prepare('UPDATE admins SET password_hash = ? WHERE id = ?'),
-};
+async function findCustomerByPhone(phone) {
+  const result = await db.query('SELECT * FROM customers WHERE phone = $1', [phone]);
+  return result.rows[0] || null;
+}
 
-// ---------------------------------------------------------------------------
-// Customer auth routes
-// ---------------------------------------------------------------------------
+async function findCustomerById(id) {
+  const result = await db.query('SELECT * FROM customers WHERE id = $1', [id]);
+  return result.rows[0] || null;
+}
 
-app.post('/api/auth/register', (req, res) => {
+async function findAdminByUsername(username) {
+  const result = await db.query('SELECT * FROM admins WHERE username = $1', [username]);
+  return result.rows[0] || null;
+}
+
+async function findAdminById(id) {
+  const result = await db.query('SELECT * FROM admins WHERE id = $1', [id]);
+  return result.rows[0] || null;
+}
+
+async function ensureAdminSeeded() {
+  const hash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+  await db.ensureAdminSeeded(ADMIN_USERNAME, hash);
+}
+
+ensureAdminSeeded().catch((error) => {
+  console.error('Failed to seed admin:', error.message);
+});
+
+app.post('/api/auth/register', asyncHandler(async (req, res) => {
   const phone = normalizePhone(req.body.phone);
   const name = String(req.body.name || '').trim();
   const password = String(req.body.password || '');
@@ -281,65 +231,82 @@ app.post('/api/auth/register', (req, res) => {
   if (password.length < 4) {
     return res.status(400).json({ error: 'Нууц үг доод тал нь 4 тэмдэгт байх ёстой' });
   }
-  if (stmts.findCustomerByPhone.get(phone)) {
+
+  const existing = await findCustomerByPhone(phone);
+  if (existing) {
     return res.status(409).json({ error: 'Энэ дугаар аль хэдийн бүртгэлтэй байна. Нэвтэрнэ үү.' });
   }
 
   const hash = bcrypt.hashSync(password, 10);
-  const info = stmts.insertCustomer.run(phone, name, hash);
-  const token = signToken({ role: 'customer', id: info.lastInsertRowid, phone, name });
+  const inserted = await db.query(
+    'INSERT INTO customers (phone, name, password_hash) VALUES ($1, $2, $3) RETURNING id, phone, name',
+    [phone, name, hash]
+  );
+  const user = inserted.rows[0];
 
-  res.json({ token, user: { id: info.lastInsertRowid, phone, name } });
-});
+  await db.query(
+    'UPDATE orders SET customer_id = $1 WHERE phone = $2 AND (customer_id IS NULL OR customer_id <> $1)',
+    [user.id, user.phone]
+  );
 
-app.post('/api/auth/login', (req, res) => {
+  const token = signToken({ role: 'customer', id: user.id, phone: user.phone, name: user.name });
+  res.json({ token, user });
+}));
+
+app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const phone = normalizePhone(req.body.phone);
   const password = String(req.body.password || '');
 
-  const customer = stmts.findCustomerByPhone.get(phone);
+  const customer = await findCustomerByPhone(phone);
   if (!customer || !bcrypt.compareSync(password, customer.password_hash)) {
     return res.status(401).json({ error: 'Утас эсвэл нууц үг буруу байна' });
   }
 
   const token = signToken({ role: 'customer', id: customer.id, phone: customer.phone, name: customer.name });
   res.json({ token, user: publicCustomer(customer) });
-});
+}));
 
-app.get('/api/my/orders', requireCustomer, (req, res) => {
-  const orders = stmts.ordersByPhone.all(req.user.phone);
-  res.json({ user: { phone: req.user.phone, name: req.user.name }, orders });
-});
+app.get('/api/my/orders', requireCustomer, asyncHandler(async (req, res) => {
+  const result = await db.query(
+    'SELECT * FROM orders WHERE phone = $1 ORDER BY created_at DESC, id DESC',
+    [req.user.phone]
+  );
+  res.json({ user: { phone: req.user.phone, name: req.user.name }, orders: result.rows });
+}));
 
-app.get('/api/my/orders/export', requireCustomer, async (req, res) => {
-  try {
-    const orders = stmts.ordersByPhone.all(req.user.phone);
-    const buffer = await buildOrdersWorkbook(orders);
-    const filename = `cargo-orders-${req.user.phone || 'me'}.xlsx`;
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(Buffer.from(buffer));
-  } catch (err) {
-    res.status(500).json({ error: 'Excel файл үүсгэж чадсангүй' });
-  }
-});
+app.get('/api/my/orders/export', requireCustomer, asyncHandler(async (req, res) => {
+  const result = await db.query(
+    'SELECT * FROM orders WHERE phone = $1 ORDER BY created_at DESC, id DESC',
+    [req.user.phone]
+  );
+  const buffer = await buildOrdersWorkbook(result.rows);
+  const filename = `cargo-orders-${req.user.phone || 'me'}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(Buffer.from(buffer));
+}));
 
-app.get('/api/my/profile', requireCustomer, (req, res) => {
-  const customer = stmts.findCustomerById.get(req.user.id);
+app.get('/api/my/profile', requireCustomer, asyncHandler(async (req, res) => {
+  const customer = await findCustomerById(req.user.id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
   res.json({ user: publicCustomer(customer) });
-});
+}));
 
-app.put('/api/my/profile', requireCustomer, (req, res) => {
+app.put('/api/my/profile', requireCustomer, asyncHandler(async (req, res) => {
   const name = String(req.body.name || '').trim();
   const address = String(req.body.address || '').trim();
   const profile_note = String(req.body.profile_note || '').trim();
   if (!name) return res.status(400).json({ error: 'Нэрээ оруулна уу' });
 
-  const customer = stmts.findCustomerById.get(req.user.id);
+  const customer = await findCustomerById(req.user.id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
 
-  stmts.updateCustomerProfile.run(name, address, profile_note, customer.id);
-  const updated = stmts.findCustomerById.get(customer.id);
+  await db.query(
+    'UPDATE customers SET name = $1, address = $2, profile_note = $3 WHERE id = $4',
+    [name, address, profile_note, customer.id]
+  );
+
+  const updated = await findCustomerById(customer.id);
   const token = signToken({
     role: 'customer',
     id: updated.id,
@@ -348,9 +315,9 @@ app.put('/api/my/profile', requireCustomer, (req, res) => {
   });
 
   res.json({ token, user: publicCustomer(updated) });
-});
+}));
 
-app.post('/api/my/avatar', requireCustomer, (req, res) => {
+app.post('/api/my/avatar', requireCustomer, (req, res, next) => {
   uploadAvatar(req, res, (err) => {
     if (err) {
       const message = err.code === 'LIMIT_FILE_SIZE'
@@ -360,28 +327,31 @@ app.post('/api/my/avatar', requireCustomer, (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'Зураг сонгоно уу' });
 
-    const customer = stmts.findCustomerById.get(req.user.id);
-    if (!customer) {
-      deleteAvatarFile(req.file.path);
-      return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
-    }
+    (async () => {
+      const customer = await findCustomerById(req.user.id);
+      if (!customer) {
+        deleteAvatarFile(req.file.path);
+        return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
+      }
 
-    deleteAvatarFile(customer.avatar_path);
-    stmts.updateCustomerAvatar.run(req.file.filename, customer.id);
-    const updated = stmts.findCustomerById.get(customer.id);
-    res.json({ user: publicCustomer(updated) });
+      deleteAvatarFile(customer.avatar_path);
+      await db.query('UPDATE customers SET avatar_path = $1 WHERE id = $2', [req.file.filename, customer.id]);
+      const updated = await findCustomerById(customer.id);
+      return res.json({ user: publicCustomer(updated) });
+    })().catch(next);
   });
 });
 
-app.delete('/api/my/avatar', requireCustomer, (req, res) => {
-  const customer = stmts.findCustomerById.get(req.user.id);
+app.delete('/api/my/avatar', requireCustomer, asyncHandler(async (req, res) => {
+  const customer = await findCustomerById(req.user.id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
   deleteAvatarFile(customer.avatar_path);
-  stmts.updateCustomerAvatar.run(null, customer.id);
-  res.json({ user: publicCustomer(stmts.findCustomerById.get(customer.id)) });
-});
+  await db.query('UPDATE customers SET avatar_path = NULL WHERE id = $1', [customer.id]);
+  const updated = await findCustomerById(customer.id);
+  res.json({ user: publicCustomer(updated) });
+}));
 
-app.put('/api/my/password', requireCustomer, (req, res) => {
+app.put('/api/my/password', requireCustomer, asyncHandler(async (req, res) => {
   const currentPassword = String(req.body.currentPassword || '');
   const newPassword = String(req.body.newPassword || '');
 
@@ -392,26 +362,22 @@ app.put('/api/my/password', requireCustomer, (req, res) => {
     return res.status(400).json({ error: 'Шинэ нууц үг доод тал нь 4 тэмдэгт байх ёстой' });
   }
 
-  const customer = stmts.findCustomerById.get(req.user.id);
+  const customer = await findCustomerById(req.user.id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
   if (!bcrypt.compareSync(currentPassword, customer.password_hash)) {
     return res.status(401).json({ error: 'Хуучин нууц үг буруу байна' });
   }
 
-  stmts.updateCustomerPassword.run(bcrypt.hashSync(newPassword, 10), customer.id);
+  await db.query('UPDATE customers SET password_hash = $1 WHERE id = $2', [bcrypt.hashSync(newPassword, 10), customer.id]);
   res.json({ ok: true });
-});
+}));
 
-// ---------------------------------------------------------------------------
-// Admin auth + management routes
-// ---------------------------------------------------------------------------
-
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', asyncHandler(async (req, res) => {
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
 
-  ensureAdminSeeded();
-  const admin = stmts.findAdminByUsername.get(username);
+  await ensureAdminSeeded();
+  const admin = await findAdminByUsername(username);
   if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
     return res.status(401).json({ error: 'Админ нэр эсвэл нууц үг буруу байна' });
   }
@@ -423,25 +389,30 @@ app.post('/api/admin/login', (req, res) => {
     name: admin.name,
   });
   res.json({ token, user: publicAdmin(admin) });
-});
-app.get('/api/admin/profile', requireAdmin, (req, res) => {
-  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+}));
+
+app.get('/api/admin/profile', requireAdmin, asyncHandler(async (req, res) => {
+  const admin = (await findAdminById(req.user.id)) || (await findAdminByUsername(req.user.username));
   if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
   res.json({ user: publicAdmin(admin) });
-});
+}));
 
-app.put('/api/admin/profile', requireAdmin, (req, res) => {
+app.put('/api/admin/profile', requireAdmin, asyncHandler(async (req, res) => {
   const name = String(req.body.name || '').trim();
   const phone = String(req.body.phone || '').trim();
   const address = String(req.body.address || '').trim();
   const profile_note = String(req.body.profile_note || '').trim();
   if (!name) return res.status(400).json({ error: 'Нэрээ оруулна уу' });
 
-  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+  const admin = (await findAdminById(req.user.id)) || (await findAdminByUsername(req.user.username));
   if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
 
-  stmts.updateAdminProfile.run(name, phone, address, profile_note, admin.id);
-  const updated = stmts.findAdminById.get(admin.id);
+  await db.query(
+    'UPDATE admins SET name = $1, phone = $2, address = $3, profile_note = $4 WHERE id = $5',
+    [name, phone, address, profile_note, admin.id]
+  );
+
+  const updated = await findAdminById(admin.id);
   const token = signToken({
     role: 'admin',
     id: updated.id,
@@ -449,9 +420,9 @@ app.put('/api/admin/profile', requireAdmin, (req, res) => {
     name: updated.name,
   });
   res.json({ token, user: publicAdmin(updated) });
-});
+}));
 
-app.post('/api/admin/avatar', requireAdmin, (req, res) => {
+app.post('/api/admin/avatar', requireAdmin, (req, res, next) => {
   uploadAvatar(req, res, (err) => {
     if (err) {
       const message = err.code === 'LIMIT_FILE_SIZE'
@@ -461,27 +432,31 @@ app.post('/api/admin/avatar', requireAdmin, (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'Зураг сонгоно уу' });
 
-    const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
-    if (!admin) {
-      deleteAvatarFile(req.file.path);
-      return res.status(404).json({ error: 'Админ олдсонгүй' });
-    }
+    (async () => {
+      const admin = (await findAdminById(req.user.id)) || (await findAdminByUsername(req.user.username));
+      if (!admin) {
+        deleteAvatarFile(req.file.path);
+        return res.status(404).json({ error: 'Админ олдсонгүй' });
+      }
 
-    deleteAvatarFile(admin.avatar_path);
-    stmts.updateAdminAvatar.run(req.file.filename, admin.id);
-    res.json({ user: publicAdmin(stmts.findAdminById.get(admin.id)) });
+      deleteAvatarFile(admin.avatar_path);
+      await db.query('UPDATE admins SET avatar_path = $1 WHERE id = $2', [req.file.filename, admin.id]);
+      const updated = await findAdminById(admin.id);
+      return res.json({ user: publicAdmin(updated) });
+    })().catch(next);
   });
 });
 
-app.delete('/api/admin/avatar', requireAdmin, (req, res) => {
-  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+app.delete('/api/admin/avatar', requireAdmin, asyncHandler(async (req, res) => {
+  const admin = (await findAdminById(req.user.id)) || (await findAdminByUsername(req.user.username));
   if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
   deleteAvatarFile(admin.avatar_path);
-  stmts.updateAdminAvatar.run(null, admin.id);
-  res.json({ user: publicAdmin(stmts.findAdminById.get(admin.id)) });
-});
+  await db.query('UPDATE admins SET avatar_path = NULL WHERE id = $1', [admin.id]);
+  const updated = await findAdminById(admin.id);
+  res.json({ user: publicAdmin(updated) });
+}));
 
-app.put('/api/admin/password', requireAdmin, (req, res) => {
+app.put('/api/admin/password', requireAdmin, asyncHandler(async (req, res) => {
   const currentPassword = String(req.body.currentPassword || '');
   const newPassword = String(req.body.newPassword || '');
 
@@ -492,65 +467,107 @@ app.put('/api/admin/password', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Шинэ нууц үг доод тал нь 4 тэмдэгт байх ёстой' });
   }
 
-  const admin = stmts.findAdminById.get(req.user.id) || stmts.findAdminByUsername.get(req.user.username);
+  const admin = (await findAdminById(req.user.id)) || (await findAdminByUsername(req.user.username));
   if (!admin) return res.status(404).json({ error: 'Админ олдсонгүй' });
   if (!bcrypt.compareSync(currentPassword, admin.password_hash)) {
     return res.status(401).json({ error: 'Хуучин нууц үг буруу байна' });
   }
 
-  stmts.updateAdminPassword.run(bcrypt.hashSync(newPassword, 10), admin.id);
+  await db.query('UPDATE admins SET password_hash = $1 WHERE id = $2', [bcrypt.hashSync(newPassword, 10), admin.id]);
   res.json({ ok: true });
-});
+}));
 
-app.get('/api/admin/orders', requireAdmin, (req, res) => {
-  const phone = normalizePhone(req.query.phone);
-  const orders = phone ? stmts.ordersByPhone.all(phone) : stmts.allOrders.all();
-  res.json({ orders });
-});
-
-app.get('/api/admin/orders/export', requireAdmin, async (req, res) => {
-  try {
-    const phone = normalizePhone(req.query.phone);
-    const orders = phone ? stmts.ordersByPhone.all(phone) : stmts.allOrders.all();
-    const buffer = await buildOrdersWorkbook(orders);
-    const filename = phone ? `cargo-orders-${phone}.xlsx` : 'cargo-orders-all.xlsx';
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(Buffer.from(buffer));
-  } catch (err) {
-    res.status(500).json({ error: 'Excel файл үүсгэж чадсангүй' });
+async function loadOrdersByPhone(phone) {
+  if (phone) {
+    const filtered = await db.query('SELECT * FROM orders WHERE phone = $1 ORDER BY created_at DESC, id DESC', [phone]);
+    return filtered.rows;
   }
-});
+  const all = await db.query('SELECT * FROM orders ORDER BY created_at DESC, id DESC');
+  return all.rows;
+}
 
-app.get('/api/admin/customers', requireAdmin, (req, res) => {
+app.get('/api/admin/orders', requireAdmin, asyncHandler(async (req, res) => {
+  const phone = normalizePhone(req.query.phone);
+  const orders = await loadOrdersByPhone(phone);
+  res.json({ orders });
+}));
+
+app.get('/api/admin/orders/export', requireAdmin, asyncHandler(async (req, res) => {
+  const phone = normalizePhone(req.query.phone);
+  const orders = await loadOrdersByPhone(phone);
+  const buffer = await buildOrdersWorkbook(orders);
+  const filename = phone ? `cargo-orders-${phone}.xlsx` : 'cargo-orders-all.xlsx';
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(Buffer.from(buffer));
+}));
+
+app.get('/api/admin/customers', requireAdmin, asyncHandler(async (req, res) => {
   const q = String(req.query.q || '').trim();
-  const rows = q
-    ? stmts.searchCustomers.all(`%${q}%`, `%${q}%`, `%${q}%`)
-    : stmts.allCustomers.all();
 
-  const customers = rows.map((c) => ({
-    ...publicCustomer(c),
-    order_count: stmts.countOrdersByPhone.get(c.phone).count,
-  }));
+  const result = q
+    ? await db.query(
+      `
+      SELECT
+        c.id,
+        c.phone,
+        c.name,
+        c.address,
+        c.profile_note,
+        c.avatar_path,
+        c.created_at,
+        COUNT(o.id)::int AS order_count
+      FROM customers c
+      LEFT JOIN orders o ON o.phone = c.phone
+      WHERE c.phone ILIKE $1 OR c.name ILIKE $2 OR c.address ILIKE $3
+      GROUP BY c.id
+      ORDER BY c.created_at DESC
+      `,
+      [`%${q}%`, `%${q}%`, `%${q}%`]
+    )
+    : await db.query(
+      `
+      SELECT
+        c.id,
+        c.phone,
+        c.name,
+        c.address,
+        c.profile_note,
+        c.avatar_path,
+        c.created_at,
+        COUNT(o.id)::int AS order_count
+      FROM customers c
+      LEFT JOIN orders o ON o.phone = c.phone
+      GROUP BY c.id
+      ORDER BY c.created_at DESC
+      `
+    );
+
+  const customers = result.rows.map((c) => ({ ...publicCustomer(c), order_count: Number(c.order_count || 0) }));
   res.json({ customers });
-});
+}));
 
-app.get('/api/admin/customers/:id', requireAdmin, (req, res) => {
-  const customer = stmts.findCustomerById.get(Number(req.params.id));
+app.get('/api/admin/customers/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const customer = await findCustomerById(Number(req.params.id));
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
-  const orders = stmts.ordersByPhone.all(customer.phone);
+
+  const ordersResult = await db.query(
+    'SELECT * FROM orders WHERE phone = $1 ORDER BY created_at DESC, id DESC',
+    [customer.phone]
+  );
+
   res.json({
     user: {
       ...publicCustomer(customer),
-      order_count: orders.length,
+      order_count: ordersResult.rows.length,
     },
-    orders,
+    orders: ordersResult.rows,
   });
-});
+}));
 
-app.put('/api/admin/customers/:id', requireAdmin, (req, res) => {
+app.put('/api/admin/customers/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const customer = stmts.findCustomerById.get(id);
+  const customer = await findCustomerById(id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
 
   const phone = normalizePhone(req.body.phone);
@@ -562,31 +579,37 @@ app.put('/api/admin/customers/:id', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Утас болон нэр заавал шаардлагатай' });
   }
 
-  const phoneOwner = stmts.findCustomerByPhone.get(phone);
-  if (phoneOwner && phoneOwner.id !== id) {
+  const phoneOwner = await findCustomerByPhone(phone);
+  if (phoneOwner && Number(phoneOwner.id) !== id) {
     return res.status(409).json({ error: 'Энэ утасны дугаар өөр хэрэглэгчид бүртгэлтэй байна' });
   }
 
-  const updateCustomerAndOrders = db.transaction(() => {
+  await db.withTransaction(async (client) => {
     if (phone !== customer.phone) {
-      stmts.updateOrdersPhone.run(phone, customer.phone);
+      await client.query(
+        'UPDATE orders SET phone = $1, customer_id = $2 WHERE phone = $3',
+        [phone, customer.id, customer.phone]
+      );
     }
-    stmts.updateCustomerAdmin.run(phone, name, address, profile_note, id);
+    await client.query(
+      'UPDATE customers SET phone = $1, name = $2, address = $3, profile_note = $4 WHERE id = $5',
+      [phone, name, address, profile_note, id]
+    );
   });
-  updateCustomerAndOrders();
 
-  const updated = stmts.findCustomerById.get(id);
+  const updated = await findCustomerById(id);
+  const countResult = await db.query('SELECT COUNT(*)::int AS count FROM orders WHERE phone = $1', [updated.phone]);
   res.json({
     user: {
       ...publicCustomer(updated),
-      order_count: stmts.countOrdersByPhone.get(updated.phone).count,
+      order_count: Number(countResult.rows[0].count || 0),
     },
   });
-});
+}));
 
-app.put('/api/admin/customers/:id/password', requireAdmin, (req, res) => {
+app.put('/api/admin/customers/:id/password', requireAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const customer = stmts.findCustomerById.get(id);
+  const customer = await findCustomerById(id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
 
   const newPassword = String(req.body.newPassword || '');
@@ -594,27 +617,29 @@ app.put('/api/admin/customers/:id/password', requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Нууц үг доод тал нь 4 тэмдэгт байх ёстой' });
   }
 
-  stmts.updateCustomerPassword.run(bcrypt.hashSync(newPassword, 10), id);
+  await db.query('UPDATE customers SET password_hash = $1 WHERE id = $2', [bcrypt.hashSync(newPassword, 10), id]);
   res.json({ ok: true });
-});
+}));
 
-app.delete('/api/admin/customers/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/customers/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const customer = stmts.findCustomerById.get(id);
+  const customer = await findCustomerById(id);
   if (!customer) return res.status(404).json({ error: 'Хэрэглэгч олдсонгүй' });
 
   const deleteWithOrders = String(req.query.deleteOrders || '') === '1';
-  const remove = db.transaction(() => {
+
+  await db.withTransaction(async (client) => {
     if (deleteWithOrders) {
-      stmts.deleteOrdersByPhone.run(customer.phone);
+      await client.query('DELETE FROM orders WHERE phone = $1', [customer.phone]);
+    } else {
+      await client.query('UPDATE orders SET customer_id = NULL WHERE customer_id = $1', [customer.id]);
     }
     deleteAvatarFile(customer.avatar_path);
-    stmts.deleteCustomer.run(id);
+    await client.query('DELETE FROM customers WHERE id = $1', [id]);
   });
-  remove();
 
   res.json({ ok: true });
-});
+}));
 
 function buildOrderPayload(body) {
   const phone = normalizePhone(body.phone);
@@ -631,43 +656,76 @@ function buildOrderPayload(body) {
   return { phone, code, item_name, quantity, unit_price, total_price, status, tracking_code, note };
 }
 
-app.post('/api/admin/orders', requireAdmin, (req, res) => {
+app.post('/api/admin/orders', requireAdmin, asyncHandler(async (req, res) => {
   const payload = buildOrderPayload(req.body);
   if (!payload.phone || !payload.code) {
     return res.status(400).json({ error: 'Утасны дугаар болон код заавал шаардлагатай' });
   }
-  const info = stmts.insertOrder.run(payload);
-  res.json({ order: stmts.orderById.get(info.lastInsertRowid) });
-});
 
-app.put('/api/admin/orders/:id', requireAdmin, (req, res) => {
+  const customer = await findCustomerByPhone(payload.phone);
+  const inserted = await db.query(
+    `
+    INSERT INTO orders (customer_id, phone, code, item_name, quantity, unit_price, total_price, status, tracking_code, note)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    RETURNING *
+    `,
+    [customer ? customer.id : null, payload.phone, payload.code, payload.item_name, payload.quantity, payload.unit_price, payload.total_price, payload.status, payload.tracking_code, payload.note]
+  );
+
+  res.json({ order: inserted.rows[0] });
+}));
+
+app.put('/api/admin/orders/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const existing = stmts.orderById.get(id);
+  const existingResult = await db.query('SELECT * FROM orders WHERE id = $1', [id]);
+  const existing = existingResult.rows[0];
   if (!existing) return res.status(404).json({ error: 'Захиалга олдсонгүй' });
 
   const payload = buildOrderPayload(req.body);
   if (!payload.phone || !payload.code) {
     return res.status(400).json({ error: 'Утасны дугаар болон код заавал шаардлагатай' });
   }
-  stmts.updateOrder.run({ ...payload, id });
-  res.json({ order: stmts.orderById.get(id) });
-});
 
-app.delete('/api/admin/orders/:id', requireAdmin, (req, res) => {
+  const customer = await findCustomerByPhone(payload.phone);
+  await db.query(
+    `
+    UPDATE orders SET
+      customer_id = $1,
+      phone = $2,
+      code = $3,
+      item_name = $4,
+      quantity = $5,
+      unit_price = $6,
+      total_price = $7,
+      status = $8,
+      tracking_code = $9,
+      note = $10,
+      updated_at = now()
+    WHERE id = $11
+    `,
+    [customer ? customer.id : null, payload.phone, payload.code, payload.item_name, payload.quantity, payload.unit_price, payload.total_price, payload.status, payload.tracking_code, payload.note, id]
+  );
+
+  const updated = await db.query('SELECT * FROM orders WHERE id = $1', [id]);
+  res.json({ order: updated.rows[0] });
+}));
+
+app.delete('/api/admin/orders/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const existing = stmts.orderById.get(id);
-  if (!existing) return res.status(404).json({ error: 'Захиалга олдсонгүй' });
-  stmts.deleteOrder.run(id);
+  const existing = await db.query('SELECT id FROM orders WHERE id = $1', [id]);
+  if (existing.rowCount === 0) return res.status(404).json({ error: 'Захиалга олдсонгүй' });
+  await db.query('DELETE FROM orders WHERE id = $1', [id]);
   res.json({ ok: true });
-});
-
-// ---------------------------------------------------------------------------
-// Static frontend
-// ---------------------------------------------------------------------------
+}));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Серверийн алдаа гарлаа' });
+});
 
 if (require.main === module && !process.env.VERCEL) {
   app.listen(PORT, () => {
